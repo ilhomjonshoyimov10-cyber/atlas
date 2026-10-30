@@ -310,3 +310,7 @@ code { font-size: 0.9em; background: var(--line); padding: 1px 5px; border-radiu
   .sb-prob { display: none; }
   .sb-pct { font-size: 9px; letter-spacing: -0.03em; }
 }
+@media (max-width: 1100px) {
+  .top { flex-wrap: wrap; row-gap: 6px; }
+  .status { order: 4; width: 100%; font-size: 12px; flex-wrap: wrap; }
+}
