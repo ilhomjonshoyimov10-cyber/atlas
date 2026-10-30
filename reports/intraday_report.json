@@ -1,109 +1,82 @@
 {
  "timeframes": {
   "5m": {
-   "n_val": 2018,
-   "n_holdout": 1724,
-   "auc_holdout": 0.5062232937530832,
-   "base_win": 41.125290023201856,
-   "threshold": 0.47467710733413715,
-   "val_precision": 71.42857142857143,
-   "val_signals": 21,
-   "holdout_signals": 17,
-   "holdout_precision": 23.52941176470588,
+   "enabled": false,
+   "threshold": 0.45384246826171876,
+   "base_win": 40.48048048048048,
+   "auc_holdout": 0.5196345081333718,
+   "holdout_signals": 634,
+   "holdout_precision": 41.95583596214511,
    "holdout_ci90": [
-    11.056163956584447,
-    43.23442599953452
+    38.78222022844865,
+    45.19741443183165
    ],
-   "holdout_avg_R": -0.3429355997420135,
-   "period_holdout": [
-    "2026-10-21 03:10:00",
-    "2026-10-30 11:25:00"
-   ],
-   "enabled": false
+   "holdout_avg_R": 0.06554815835452861,
+   "n_holdout": 4995,
+   "method": "walk-forward, 4 blok",
+   "reason": "ustunlik isbotlanmadi (walk-forward)"
   },
   "15m": {
-   "n_val": 735,
-   "n_holdout": 643,
-   "auc_holdout": 0.4987917511416928,
-   "base_win": 38.25816485225506,
-   "threshold": 0.45587673306465154,
-   "val_precision": 46.666666666666664,
-   "val_signals": 15,
-   "holdout_signals": 3,
-   "holdout_precision": 100.0,
+   "enabled": true,
+   "threshold": 0.4375583842396737,
+   "base_win": 36.644951140065146,
+   "auc_holdout": 0.5266127138277953,
+   "holdout_signals": 165,
+   "holdout_precision": 53.333333333333336,
    "holdout_ci90": [
-    52.72778402699663,
-    100.0
+    46.96144081754204,
+    59.59829812870149
    ],
-   "holdout_avg_R": 1.5,
-   "period_holdout": [
-    "2026-10-21 00:30:00",
-    "2026-10-30 08:45:00"
-   ],
-   "enabled": false
+   "holdout_avg_R": 0.3333333333333333,
+   "n_holdout": 1842,
+   "method": "walk-forward, 4 blok"
   },
   "30m": {
-   "n_val": 424,
-   "n_holdout": 284,
-   "auc_holdout": 0.5244559362206421,
-   "base_win": 35.91549295774648,
-   "threshold": 0.4520039427280426,
-   "val_precision": 51.66666666666667,
-   "val_signals": 60,
-   "holdout_signals": 26,
-   "holdout_precision": 50.0,
+   "enabled": false,
+   "threshold": 0.4694676935672761,
+   "base_win": 38.72889771598808,
+   "auc_holdout": 0.532040892656776,
+   "holdout_signals": 102,
+   "holdout_precision": 48.03921568627451,
    "holdout_ci90": [
-    34.69083140662213,
-    65.30916859337788
+    40.08136174930322,
+    56.097819372794866
    ],
-   "holdout_avg_R": 0.25,
-   "period_holdout": [
-    "2026-10-20 19:30:00",
-    "2026-10-30 04:00:00"
-   ],
-   "enabled": false
+   "holdout_avg_R": 0.20098039215686275,
+   "n_holdout": 1007,
+   "method": "walk-forward, 4 blok",
+   "reason": "ustunlik isbotlanmadi (walk-forward)"
   },
   "1h": {
-   "n_val": 1646,
-   "n_holdout": 2030,
-   "auc_holdout": 0.5660576777895213,
-   "base_win": 38.275862068965516,
-   "threshold": 0.460914608836174,
-   "val_precision": 48.484848484848484,
-   "val_signals": 33,
-   "holdout_signals": 36,
-   "holdout_precision": 69.44444444444444,
+   "enabled": true,
+   "threshold": 0.4684460926055909,
+   "base_win": 37.16202480178899,
+   "auc_holdout": 0.5656331256057149,
+   "holdout_signals": 95,
+   "holdout_precision": 67.36842105263158,
    "holdout_ci90": [
-    55.87236312432942,
-    80.31307172121048
+    59.095776914058185,
+    74.68468692241981
    ],
-   "holdout_avg_R": 0.7361111111111112,
-   "period_holdout": [
-    "2026-06-24 10:00:00",
-    "2026-10-29 17:00:00"
-   ],
-   "enabled": true
+   "holdout_avg_R": 0.6842105263157895,
+   "n_holdout": 4919,
+   "method": "walk-forward, 4 blok"
   },
   "4h": {
-   "n_val": 432,
-   "n_holdout": 449,
-   "auc_holdout": 0.5431661092530657,
-   "base_win": 33.4075723830735,
-   "threshold": 0.4324852883815765,
-   "val_precision": 43.07692307692308,
-   "val_signals": 130,
-   "holdout_signals": 162,
-   "holdout_precision": 36.41975308641975,
+   "enabled": false,
+   "threshold": 0.4585895347595215,
+   "base_win": 38.830297219558965,
+   "auc_holdout": 0.5526529664460699,
+   "holdout_signals": 114,
+   "holdout_precision": 42.98245614035088,
    "holdout_ci90": [
-    30.48803061806582,
-    42.79504250859184
+    35.62662253688934,
+    50.66178705573932
    ],
-   "holdout_avg_R": -0.08950617283950617,
-   "period_holdout": [
-    "2026-06-24 20:00:00",
-    "2026-10-26 08:00:00"
-   ],
-   "enabled": false
+   "holdout_avg_R": 0.07456140350877193,
+   "n_holdout": 1043,
+   "method": "walk-forward, 4 blok",
+   "reason": "ustunlik isbotlanmadi (walk-forward)"
   }
  },
  "n_events": 33823,
@@ -112,17 +85,18 @@
   "sl_atr": 1.0,
   "horizon_bars": 20
  },
+ "features": "OHLC 64 bar + strategiya + kontekst (sessiya, katta TF trendi)",
  "base_rates": {
   "15m|bos_long": 0.30303030303030304,
   "15m|bos_short": 0.4423076923076923,
   "15m|engulf_resistance": 0.3225806451612903,
   "15m|engulf_support": 0.3275862068965517,
-  "15m|pin_resistance": 0.37158469945355194,
+  "15m|pin_resistance": 0.375,
   "15m|pin_support": 0.389937106918239,
   "15m|rsi_overbought": 0.4722222222222222,
   "15m|rsi_oversold": 0.3384615384615385,
   "15m|sr_bounce_long": 0.3361867704280156,
-  "15m|sr_bounce_short": 0.41887905604719766,
+  "15m|sr_bounce_short": 0.41973490427098675,
   "15m|sr_breakdown_short": 0.4420289855072464,
   "15m|sr_breakout_long": 0.3424657534246575,
   "1h|asc_triangle": 0.22641509433962265,
@@ -152,7 +126,7 @@
   "30m|pin_resistance": 0.4166666666666667,
   "30m|pin_support": 0.375,
   "30m|rsi_oversold": 0.2926829268292683,
-  "30m|sr_bounce_long": 0.3561430793157076,
+  "30m|sr_bounce_long": 0.3555900621118012,
   "30m|sr_bounce_short": 0.4296081277213353,
   "30m|sr_breakdown_short": 0.4708994708994709,
   "30m|sr_breakout_long": 0.3155080213903743,
