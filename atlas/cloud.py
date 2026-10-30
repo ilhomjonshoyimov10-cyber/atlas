@@ -39,7 +39,7 @@ def _now() -> pd.Timestamp:
 def _write(rel: str, obj) -> None:
     p = SITE / rel
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":"), default=str))
+    p.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":"), default=str), encoding="utf-8")
 
 
 def closed_bars_only(df: pd.DataFrame, now: pd.Timestamp | None = None) -> pd.DataFrame:
@@ -89,7 +89,7 @@ def collect_news() -> tuple[list[dict], dict]:
 def append_forecast_log(fc: dict) -> int:
     seen = set()
     if LOG_PATH.exists():
-        for line in LOG_PATH.read_text().splitlines():
+        for line in LOG_PATH.read_text(encoding="utf-8", errors="replace").splitlines():
             try:
                 r = json.loads(line)
                 seen.add((r["symbol"], r["as_of"]))
@@ -97,7 +97,7 @@ def append_forecast_log(fc: dict) -> int:
                 pass
     made = _now().isoformat()
     n = 0
-    with LOG_PATH.open("a") as f:
+    with LOG_PATH.open("a", encoding="utf-8") as f:
         for s, item in fc.items():
             if (s, item["as_of"]) in seen:
                 continue
@@ -114,7 +114,7 @@ def track_record(prices: dict[str, pd.DataFrame]) -> dict:
         return {"summary": [], "recent": [], "pending": 0, "started": None}
     rows, pending, started = [], 0, None
     closes = {s: (pd.DatetimeIndex(df["date"]), df["close"].to_numpy()) for s, df in prices.items()}
-    for line in LOG_PATH.read_text().splitlines():
+    for line in LOG_PATH.read_text(encoding="utf-8", errors="replace").splitlines():
         try:
             r = json.loads(line)
         except Exception:
@@ -163,7 +163,7 @@ def export_backtests(svc, force: bool = False) -> int:
     h = _hash(oos)
     if not h:
         return 0
-    if not force and stamp.exists() and stamp.read_text() == h:
+    if not force and stamp.exists() and stamp.read_text(encoding="utf-8", errors="replace") == h:
         return 0   # bashoratlar o'zgarmagan -> qayta hisoblash shart emas
     n = 0
     for t in BT_THRESHOLDS:
@@ -174,7 +174,7 @@ def export_backtests(svc, force: bool = False) -> int:
             except FileNotFoundError as e:
                 log.warning("Backtest: %s", e)
                 return 0
-    stamp.write_text(h)
+    stamp.write_text(h, encoding="utf-8")
     return n
 
 
@@ -196,7 +196,7 @@ def score_news(svc, limit: int = 200) -> int:
             continue
         try:
             res = svc.analyze_text(it["title"])
-            f.write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")))
+            f.write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
             if not it.get("impact"):
                 h1, h5 = (f"s_ret_h{h}" for h in svc.cfg.horizons[:2])
                 k1 = f"sigma_h{svc.cfg.horizons[0]}"

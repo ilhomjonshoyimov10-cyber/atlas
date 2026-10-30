@@ -249,7 +249,7 @@ def strategies():
 def experiments():
     from ..config import REPORTS_DIR
     reg = REPORTS_DIR / "experiments.jsonl"
-    return [json.loads(l) for l in reg.read_text().splitlines()] if reg.exists() else []
+    return [json.loads(l) for l in reg.read_text(encoding="utf-8", errors="replace").splitlines()] if reg.exists() else []
 
 
 @app.get("/api/sources")

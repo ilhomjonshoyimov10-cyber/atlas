@@ -118,10 +118,12 @@ def main(argv=None):
         _live(a)
     elif a.cmd == "intraday-train":
         from .live.engine import fetch_intraday
-        from .live.intraday import load_frames, train as intra_train
+        from .live.intraday import load_frames, train_final as intra_final
+        from .live.walkforward import walk_forward
         fetch_intraday()
-        r = intra_train(load_frames())
-        print(json.dumps({tf: {k: v.get(k) for k in ("enabled", "holdout_precision", "holdout_signals", "base_win")}
+        frames = load_frames()
+        r = intra_final(frames, walk_forward(frames, use_ctx=True))
+        print(json.dumps({tf: {k: v.get(k) for k in ("enabled", "holdout_precision", "holdout_ci90", "holdout_signals", "base_win")}
                           for tf, v in r["timeframes"].items()}, indent=1, default=float))
     elif a.cmd == "ta-train":
         from .ta.pipeline import train as ta_train

@@ -23,7 +23,7 @@ def load_inputs(source: str = "real"):
     if source == "synthetic":
         from .data.synthetic import generate
         prices, news = generate()
-        marker.write_text("Bu ma'lumotlar SINTETIK (demo). Haqiqiy narxlar uchun: python -m atlas.cli download\n")
+        marker.write_text("Bu ma'lumotlar SINTETIK (demo). Haqiqiy narxlar uchun: python -m atlas.cli download\n", encoding="utf-8")
         for s, df in prices.items():
             df.to_parquet(PRICES_DIR / f"{s}.parquet", index=False)
         return prices, news
@@ -73,7 +73,7 @@ def train_final(panel: Panel, cube, cfg: ModelConfig, device="cpu", embedder="ha
     rep = {}
     for p in ("report_final.json", "report_walkforward.json"):
         if (REPORTS_DIR / p).exists():
-            rep[p] = json.loads((REPORTS_DIR / p).read_text())
+            rep[p] = json.loads((REPORTS_DIR / p).read_text(encoding="utf-8", errors="replace"))
     save_bundle(BUNDLE_PATH, model, cfg_s, off, bm.news_dim, None, rep, embedder)
     log.info("Servis modeli saqlandi: %s (konformal: %s)", BUNDLE_PATH, np.round(off, 3))
     return model, off

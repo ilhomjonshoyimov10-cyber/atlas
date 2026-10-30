@@ -277,3 +277,21 @@ def test_news_alert_only_when_strong(tmp_path, monkeypatch):
     assert E.news_alert({"title": "Company opens new office", "event": "none"}, weak, thr=0.1, push_enabled=False) is None
     e = E.news_alert({"title": "Fed raises rates", "event": "fomc"}, weak, thr=0.1, push_enabled=False)
     assert e is not None and e["event"] == "fomc"        # muhim makro voqea — kuchsiz bo'lsa ham xabar
+
+
+def test_intraday_context_no_lookahead():
+    """Katta TF konteksti faqat signal bari yopilgunga qadar yopilgan katta barlardan olinadi."""
+    import numpy as np
+    import pandas as pd
+
+    from atlas.live.context import context_frame
+
+    n = 24 * 40
+    d = pd.date_range("2026-01-01", periods=n, freq="1h")
+    c = 100 + np.cumsum(np.random.default_rng(1).normal(0, 0.3, n))
+    h1 = pd.DataFrame({"date": d, "open": c, "high": c + 0.2, "low": c - 0.2, "close": c, "volume": 1.0})
+    fut = h1.copy()
+    fut.loc[600:, ["open", "high", "low", "close"]] += 50          # kelajak o'zgaradi
+    a = context_frame({"1h": h1}, "1h", h1).iloc[:590]
+    b = context_frame({"1h": fut}, "1h", fut).iloc[:590]
+    assert np.allclose(a.to_numpy(), b.to_numpy())

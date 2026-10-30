@@ -53,7 +53,7 @@ def push(title: str, message: str, tags: list[str] | None = None, priority: int 
 
 
 def journal(entry: dict) -> None:
-    with SIGNALS_LOG.open("a") as f:
+    with SIGNALS_LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
 
 
@@ -61,7 +61,7 @@ def read_journal() -> list[dict]:
     if not SIGNALS_LOG.exists():
         return []
     out = []
-    for line in SIGNALS_LOG.read_text().splitlines():
+    for line in SIGNALS_LOG.read_text(encoding="utf-8", errors="replace").splitlines():
         try:
             out.append(json.loads(line))
         except Exception:
@@ -128,7 +128,7 @@ def score_open(frames: dict[str, pd.DataFrame]) -> int:
             r["status"], r["closed_at"] = st, _now()
             changed += 1
     if changed:
-        SIGNALS_LOG.write_text("".join(json.dumps(r, ensure_ascii=False, default=str) + "\n" for r in rows))
+        SIGNALS_LOG.write_text("".join(json.dumps(r, ensure_ascii=False, default=str) + "\n" for r in rows), encoding="utf-8")
     return changed
 
 
@@ -142,21 +142,37 @@ def gold_tick(frames: dict[str, pd.DataFrame] | None = None, news_ctx: str = "",
     if not nets:
         return []
     frames = frames or fetch_intraday()
-    seen = {(r.get("tf"), r.get("time"), r.get("setup")) for r in read_journal() if r.get("kind") == "gold"}
+    rows = [r for r in read_journal() if r.get("kind") == "gold"]
+    seen = {(r.get("tf"), r.get("time"), r.get("setup")) for r in rows}
+    last_push: dict = {}
+    for r in rows:
+        if r.get("strong") and not r.get("repeat"):
+            k = (r["tf"], r["dir"])
+            last_push[k] = max(last_push.get(k, pd.Timestamp.min), pd.Timestamp(r["time"]))
     fired = []
     for tf in TIMEFRAMES:
         df = frames.get(tf)
         if df is None or len(df) < 300:
             continue
         df = drop_unclosed(df, tf)
-        for s in scan_latest(df, tf, nets, z, lookback_bars=2):
+        for s in scan_latest(df, tf, nets, z, lookback_bars=2, frames=frames):
             key = (tf, s["time"], s["setup"])
             if key in seen:
                 continue
+            # faqat yangi yopilgan bar: kechikib topilgan signal (natijasi qisman ma'lum) jurnalga yozilmaydi
+            closed_at = pd.Timestamp(s["time"]) + pd.Timedelta(minutes=TF_MINUTES[tf])
+            if pd.Timestamp.now(tz="UTC").tz_localize(None) - closed_at > pd.Timedelta(minutes=1.5 * TF_MINUTES[tf] + 2):
+                seen.add(key)
+                continue
             seen.add(key)
             entry = {"kind": "gold", "symbol": "GOLD", "created": _now(), "status": "ochiq", "news": news_ctx, **s}
+            # takroriy signal: shu TF va yo'nalishda so'nggi 8 bar ichida push bo'lgan bo'lsa — jurnalga yoziladi, push yo'q
+            if s["strong"] and last_push.get((tf, s["dir"])) and \
+                    pd.Timestamp(s["time"]) - last_push[(tf, s["dir"])] < pd.Timedelta(minutes=8 * TF_MINUTES[tf]):
+                entry["repeat"] = True
             journal(entry)
-            if s["strong"]:
+            if s["strong"] and not entry.get("repeat"):
+                last_push[(tf, s["dir"])] = pd.Timestamp(s["time"])
                 fired.append(entry)
                 if push_enabled:
                     ci = s.get("ci90") or [None, None]
@@ -263,7 +279,7 @@ def summary(limit: int = 100) -> dict:
     gold = [r for r in rows if r.get("kind") == "gold"]
     strong = [r for r in gold if r.get("strong")]
     closed = [r for r in strong if r.get("status") in ("maqsad", "stop", "muddati o'tdi")]
-    rep = json.loads(INTRA_REPORT.read_text()) if INTRA_REPORT.exists() else {}
+    rep = json.loads(INTRA_REPORT.read_text(encoding="utf-8", errors="replace")) if INTRA_REPORT.exists() else {}
     return {
         "topic": NTFY_TOPIC, "ntfy_url": NTFY_URL,
         "timeframes": rep.get("timeframes", {}), "rules": rep.get("rules", {}),

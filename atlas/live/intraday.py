@@ -75,12 +75,14 @@ def load_frames(dirpath: Path = INTRA_DIR, symbol: str = "GOLD") -> dict[str, pd
     return out
 
 
-def build_dataset(frames: dict[str, pd.DataFrame]) -> dict:
+def build_dataset(frames: dict[str, pd.DataFrame], use_ctx: bool = True) -> dict:
+    from .context import context_frame, ctx_vector
     rows, seqs, tabs = [], [], []
     for tf, df in frames.items():
         df = sanitize_ohlc(df.reset_index(drop=True))
         if len(df) < 400:
             continue
+        ctx = context_frame(frames, tf, df) if use_ctx else None
         events, aux = scan(df)
         ind, pv = aux["ind"], aux["pv"]
         atr = ind["atr"].to_numpy()
@@ -91,7 +93,7 @@ def build_dataset(frames: dict[str, pd.DataFrame]) -> dict:
             rows.append({"tf": tf, "group": tf, "date": df["date"].iat[t], "t": t, "setup": ev["setup"], "dir": d,
                          "win": outc[d][0][t], "R": outc[d][1][t]})
             seqs.append(_seq(df, t, ev["atr"], d, vol_z))
-            tabs.append(_tab(ev, ind, pv, df))
+            tabs.append(_tab(ev, ind, pv, df) + (ctx_vector(ctx, t, d) if use_ctx else []))
         log.info("%s: %d bar, %d signal", tf, len(df), len(events))
     return {"meta": pd.DataFrame(rows), "seq": np.stack(seqs).astype(np.float32), "tab": np.asarray(tabs, np.float32)}
 
@@ -171,7 +173,7 @@ def train(frames: dict[str, pd.DataFrame], n_models: int = 3) -> dict:
     report["base_rates"] = {f"{tf}|{s}": float(g["win"].mean()) for (tf, s), g in lab.groupby(["tf", "setup"]) if len(g) >= 20}
     torch.save({"states": [n.state_dict() for n in nets], "n_tab": int(Tr.tab.shape[1]), "thresholds": thresholds,
                 "report": report, "timeframes": TIMEFRAMES}, INTRA_MODEL)
-    INTRA_REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=1, default=float))
+    INTRA_REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     return report
 
 
@@ -186,9 +188,12 @@ def load_model():
     return nets, z
 
 
-def scan_latest(df: pd.DataFrame, tf: str, nets, z, lookback_bars: int = 1) -> list[dict]:
+def scan_latest(df: pd.DataFrame, tf: str, nets, z, lookback_bars: int = 1, frames: dict | None = None) -> list[dict]:
     """Oxirgi yopilgan bar(lar)da paydo bo'lgan signallar + model bahosi."""
+    from .context import context_frame, ctx_vector
     df = sanitize_ohlc(df.tail(900).reset_index(drop=True))
+    use_ctx = bool(z.get("use_ctx"))
+    ctx = context_frame(frames or {tf: df}, tf, df) if use_ctx else None
     if len(df) < 260 or not nets:
         return []
     events, aux = scan(df, start=len(df) - lookback_bars)
@@ -198,7 +203,8 @@ def scan_latest(df: pd.DataFrame, tf: str, nets, z, lookback_bars: int = 1) -> l
     out = []
     for ev in events:
         seq = torch.from_numpy(_seq(df, ev["t"], ev["atr"], ev["dir"], vol_z)[None])
-        tab = torch.tensor([_tab(ev, ind, pv, df)], dtype=torch.float32)
+        tab = torch.tensor([_tab(ev, ind, pv, df) + (ctx_vector(ctx, ev["t"], ev["dir"]) if use_ctx else [])],
+                           dtype=torch.float32)
         d = Data(seq, tab, torch.tensor([SETUP_NAMES.index(ev["setup"])]), torch.tensor([TIMEFRAMES.index(tf)]),
                  torch.zeros(1))
         p = float(predict(nets, d)[0])
@@ -210,3 +216,41 @@ def scan_latest(df: pd.DataFrame, tf: str, nets, z, lookback_bars: int = 1) -> l
                     "measured_precision": rep.get("holdout_precision"), "ci90": rep.get("holdout_ci90"),
                     "base_win": z["report"]["base_rates"].get(f"{tf}|{ev['setup']}", rep.get("base_win", 40) / 100)})
     return out
+
+
+def train_final(frames: dict[str, pd.DataFrame], wf: dict, n_models: int = 3, margin_pp: float = 3.0) -> dict:
+    """Servis modeli: barcha ma'lumot (har TF da oxirgi 15% — erta to'xtatish va chegara uchun).
+
+    Aniqlik raqamlari walk-forward natijasidan olinadi (bir nechta model ko'rmagan davr birlashmasi).
+    Push faqat: kamida 20 ta sinov signali va 90% ishonch oralig'ining pastki chegarasi tasodifiy kirishdan
+    kamida `margin_pp` foiz punkt yuqori bo'lsa (5 ta TF va 2 variant sinalgani uchun qo'shimcha zaxira).
+    """
+    ds = build_dataset(frames, use_ctx=True)
+    meta = ds["meta"]
+    lab = meta["win"].notna().to_numpy()
+    rel = meta.groupby("tf")["t"].transform(lambda s: s / s.max()).to_numpy()
+    tr, va = np.where(lab & (rel < 0.85 - 0.003))[0], np.where(lab & (rel >= 0.85))[0]
+    Tr, Va = _tensors(ds, tr), _tensors(ds, va)
+    nets = [_fit_one(Tr, Va, 100 + s, n_groups=len(TIMEFRAMES)) for s in range(n_models)]
+    from .walkforward import _threshold
+    vm = meta.iloc[va].assign(p=predict(nets, Va))
+    thresholds, tfs = {}, {}
+    for tf in TIMEFRAMES:
+        thr = _threshold(vm[vm["tf"] == tf])
+        thresholds[tf] = thr if thr is not None else 1.0
+        w = wf.get(tf, {})
+        ci = w.get("ci90")
+        enabled = bool(w.get("strong_n", 0) >= 20 and ci and ci[0] >= w["base_win"] + margin_pp and thr is not None)
+        tfs[tf] = {"enabled": enabled, "threshold": thr, "base_win": w.get("base_win"), "auc_holdout": w.get("auc"),
+                   "holdout_signals": w.get("strong_n"), "holdout_precision": w.get("strong_win"), "holdout_ci90": ci,
+                   "holdout_avg_R": w.get("strong_avg_R"), "n_holdout": w.get("n_test"), "method": "walk-forward, 4 blok",
+                   **({} if enabled else {"reason": "ustunlik isbotlanmadi (walk-forward)" if w else "ma'lumot yo'q"})}
+    lab_m = meta[lab]
+    report = {"timeframes": tfs, "n_events": int(len(meta)),
+              "rules": {"tp_atr": 1.5, "sl_atr": 1.0, "horizon_bars": 20},
+              "features": "OHLC 64 bar + strategiya + kontekst (sessiya, katta TF trendi)",
+              "base_rates": {f"{tf}|{s}": float(g["win"].mean()) for (tf, s), g in lab_m.groupby(["tf", "setup"]) if len(g) >= 20}}
+    torch.save({"states": [n.state_dict() for n in nets], "n_tab": int(Tr.tab.shape[1]), "thresholds": thresholds,
+                "report": report, "timeframes": TIMEFRAMES, "use_ctx": True}, INTRA_MODEL)
+    INTRA_REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    return report

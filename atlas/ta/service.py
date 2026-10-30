@@ -29,7 +29,7 @@ def strategies(today: list[dict] | None = None) -> dict:
     """Strategiyalar sahifasi: dataset, har bir strategiyaning natijasi, SetupNet holdout bahosi."""
     if not TA_REPORT.exists():
         return {"ready": False}
-    rep = json.loads(TA_REPORT.read_text())
+    rep = json.loads(TA_REPORT.read_text(encoding="utf-8", errors="replace"))
     keep = ("holdout_start", "holdout_end", "train_end", "n_train", "n_val", "n_holdout", "auc", "auc_baseline",
             "brier", "brier_baseline", "brier_skill", "holdout_win_rate", "filter", "stats_train", "stats_holdout",
             "per_setup_holdout", "dataset")

@@ -31,5 +31,5 @@ def train(prices=None, n_models: int = 3) -> dict:
                   "setup_group": {f"{k[0]}|{k[1]}": v for k, v in lab.groupby(["setup", "group"])["win"].mean().items()},
                   "setup_n": lab.groupby("setup").size().to_dict()}
     save(nets, TA_MODEL, base_rates, report)
-    TA_REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=1, default=float))
+    TA_REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     return report

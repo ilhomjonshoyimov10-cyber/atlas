@@ -177,7 +177,7 @@ def walk_forward(panel: Panel, cube, cfg: ModelConfig, device="cpu", final: bool
                                 for k, (s, p, md) in raw.items()}
     report["experiment_no"] = register_experiment(report, final)
     path = REPORTS_DIR / ("report_final.json" if final else "report_walkforward.json")
-    path.write_text(json.dumps(report, indent=2, default=float))
+    path.write_text(json.dumps(report, indent=2, default=float), encoding="utf-8")
     log.info("Hisobot: %s (tajriba #%d)", path, report["experiment_no"])
     return report
 
@@ -189,14 +189,14 @@ def register_experiment(report: dict, final: bool) -> int:
     import datetime as dt
     import hashlib
     reg = REPORTS_DIR / "experiments.jsonl"
-    prev = reg.read_text().splitlines() if reg.exists() else []
+    prev = reg.read_text(encoding="utf-8", errors="replace").splitlines() if reg.exists() else []
     cfg_hash = hashlib.sha1(json.dumps(report["config"], sort_keys=True, default=str).encode()).hexdigest()[:10]
     holdout_uses = sum(1 for l in prev if json.loads(l).get("final")) + int(final)
     rec = {"no": len(prev) + 1, "time": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
            "config_hash": cfg_hash, "final": final, "holdout_uses_total": holdout_uses,
            "summary": {k: v.get("pinball") for k, v in report.get("walk_forward_summary", {}).items()},
            "tests": {k: v["p_holm"] for k, v in report.get("ablation_tests", {}).items()}}
-    with reg.open("a") as f:
+    with reg.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, default=float) + "\n")
     report["holdout_uses_total"] = holdout_uses
     if final and holdout_uses > 1:
