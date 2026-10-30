@@ -36,7 +36,8 @@ export default function TradingViewWidget({ symbol }: { symbol: string }) {
   }, [symbol, dark]);
   return (
     <div className="tv-wrap">
-      <div ref={box} className="tradingview-widget-container tv-box" />
+      {/* vidjet konteynerga "height:100%" yozib qo'yadi — shuning uchun balandlik tashqi qobiqda beriladi */}
+      <div className="tv-frame"><div ref={box} className="tradingview-widget-container tv-box" /></div>
       <p className="hint">Jonli grafik va asboblar: <a href={`https://www.tradingview.com/symbols/${(TV_SYMBOLS[symbol] ?? symbol).replace(":", "-")}/`}
         target="_blank" rel="noreferrer">TradingView</a>. Bu grafik TradingView ma'lumotlari ({TV_SYMBOLS[symbol] ?? symbol}) asosida;
         ATLAS prognozi va darajalari "ATLAS grafigi" rejimida ko'rinadi.</p>

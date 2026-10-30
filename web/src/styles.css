@@ -367,5 +367,6 @@ code { font-size: 0.9em; background: var(--line); padding: 1px 5px; border-radiu
 .candle-legend i { display: inline-block; width: 18px; height: 0; border-top: 2px dashed var(--fc); vertical-align: middle; margin-right: 4px; }
 .candle-legend i.lg-s { border-top-color: var(--up); } .candle-legend i.lg-r { border-top-color: var(--down); }
 .candle-legend i.lg-live { width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--up); }
-.tv-box { height: 520px; width: 100%; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
-@media (max-width: 760px) { .candle-chart { height: 340px; } .tv-box { height: 440px; } .mode-sw { margin-left: 0; } }
+.tv-frame { height: 520px; width: 100%; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
+.tv-box { height: 100%; width: 100%; }
+@media (max-width: 760px) { .candle-chart { height: 340px; } .tv-frame { height: 440px; } .mode-sw { margin-left: 0; } }
