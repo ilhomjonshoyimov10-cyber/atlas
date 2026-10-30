@@ -69,6 +69,10 @@ def main(argv=None):
     dm = sub.add_parser("demo"); dm.add_argument("--quick", action="store_true")
     bt = sub.add_parser("backtest"); bt.add_argument("--threshold", type=float, default=0.05)
     bt.add_argument("--cost-bps", type=float, default=5.0)
+    lv = sub.add_parser("live", help="jonli signallar: yangilik shoki + oltin 5m–4h (push)")
+    lv.add_argument("--once", action="store_true", help="bir marta ishlab chiqish (bulut/cron uchun)")
+    lv.add_argument("--no-push", action="store_true")
+    sub.add_parser("intraday-train", help="oltin ichki kun signal modelini qayta o'qitish")
     sub.add_parser("ta-train", help="texnik tahlil dataseti + SetupNet o'qitish")
     ta = sub.add_parser("ta", help="bitta aktiv bo'yicha texnik tahlil"); ta.add_argument("symbol")
     cu = sub.add_parser("cloud-update", help="statik sayt uchun ma'lumotni yangilash (GitHub Actions)")
@@ -110,6 +114,15 @@ def main(argv=None):
         panel, _, _ = _load_cached(cfg)
         r = run_backtest(panel, "HOLDOUT", "full", a.threshold, a.cost_bps)
         print(json.dumps({"period": r["period"], "stats": r["stats"]}, indent=1))
+    elif a.cmd == "live":
+        _live(a)
+    elif a.cmd == "intraday-train":
+        from .live.engine import fetch_intraday
+        from .live.intraday import load_frames, train as intra_train
+        fetch_intraday()
+        r = intra_train(load_frames())
+        print(json.dumps({tf: {k: v.get(k) for k in ("enabled", "holdout_precision", "holdout_signals", "base_win")}
+                          for tf, v in r["timeframes"].items()}, indent=1, default=float))
     elif a.cmd == "ta-train":
         from .ta.pipeline import train as ta_train
         r = ta_train()
@@ -199,6 +212,37 @@ def _real(a, cfg: ModelConfig):
     log.info("5/5 Servis modeli o'qitilmoqda...")
     train_final(panel, cube, cfg, _device(a.device), emb)
     log.info("TAYYOR. Endi: python -m atlas.cli serve  ->  http://localhost:8000")
+
+
+def _live(a):
+    """Jonli signallar. --once: yangiliklarni bir marta yig'ib baholaydi, oltin signallarini tekshiradi va chiqadi."""
+    import time as _t
+    from .live.engine import LiveEngine, fetch_intraday, gold_tick, news_alert, news_threshold, recent_gold_news, score_open
+    from .api.service import Service
+    svc = Service()
+    push = not a.no_push
+    def news_round():
+        from .cloud import collect_news
+        new, _ = collect_news()
+        thr = news_threshold(svc.store)
+        svc.add_news(new)
+        for it in new[:40]:
+            try:
+                imp = svc.quick_impact(it["title"])
+                svc.store.set_impact(it["id"], json.dumps(imp))
+                news_alert(it, imp, thr, push)
+            except Exception as e:
+                log.warning("Xabar baholanmadi: %s", e)
+        return len(new)
+    while True:
+        n = news_round()
+        frames = fetch_intraday()
+        fired = gold_tick(frames, recent_gold_news(svc.store), push)
+        score_open(frames)
+        log.info("live: %d yangi xabar, %d kuchli oltin signali", n, len(fired))
+        if a.once:
+            break
+        _t.sleep(60)
 
 
 def _seed_demo_news(news):

@@ -105,6 +105,25 @@ export interface Strategies {
   rules: { tp_atr: number; sl_atr: number; horizon: number };
   today?: { symbol: string; name: string; setup: string; label: string; dir: number; p_model: number | null; base_win: number | null; strong: boolean; entry: number; tp: number; sl: number }[];
 }
+export interface GoldSignal {
+  kind: "gold"; tf: string; setup: string; label: string; dir: number; time: string; entry: number; tp: number; sl: number;
+  p: number; strong: boolean; measured_precision: number | null; ci90: [number, number] | null; base_win: number;
+  status?: string; created: string; news?: string;
+}
+export interface NewsSignal {
+  kind: "news"; created: string; title: string; source?: string; event: string; first_seen?: string; strong: boolean;
+  impact: { symbol: string; name: string; ret_h1: number; ret_h5: number; sigma_h1: number }[];
+}
+export interface TFStat {
+  enabled: boolean; reason?: string; n_holdout: number; auc_holdout?: number; base_win?: number; holdout_signals?: number;
+  holdout_precision?: number | null; holdout_ci90?: [number, number] | null; holdout_avg_R?: number | null; period_holdout?: [string, string];
+}
+export interface Signals {
+  topic: string; ntfy_url: string; timeframes: Record<string, TFStat>; rules: { tp_atr: number; sl_atr: number; horizon_bars: number };
+  live: { strong: number; closed: number; tp: number; sl: number };
+  recent: (GoldSignal | NewsSignal)[]; watch: GoldSignal[];
+  engine?: { running: boolean; last_run: string | null; error: string | null };
+}
 export type Quotes = { quotes: Record<string, { symbol: string; price: number; change_pct: number | null; time: string; source: string }>; error: string | null };
 
 export const api = {
@@ -130,6 +149,7 @@ export const api = {
   backtest: (thr: number, cost: number) => STATIC
     ? once<any>(`backtest/t${thr.toFixed(2)}_c${cost}.json`, 3600000)
     : get<any>(`/api/backtest?threshold=${thr}&cost_bps=${cost}`),
+  signals: () => STATIC ? once<Signals>("signals.json", 60000) : get<Signals>("/api/signals"),
   ta: (s: string) => STATIC ? once<TA>(`ta/${s}.json`) : get<TA>(`/api/ta/${s}`),
   strategies: () => STATIC ? once<Strategies>("strategies.json") : get<Strategies>("/api/strategies"),
   /** Statik rejimda faqat lentadagi xabarlar uchun oldindan hisoblangan tahlil mavjud. */

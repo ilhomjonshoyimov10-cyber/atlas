@@ -25,6 +25,8 @@ log = logging.getLogger(__name__)
 SVC: Service | None = None
 CLIENTS: set[WebSocket] = set()
 COLLECTOR: Collector | None = None
+ENGINE = None          # jonli signal dvigateli (oltin 5m–4h + yangilik shoki)
+_NEWS_THR = {"value": float("inf"), "at": 0.0}
 LIVE = LiveQuotes(interval=int(os.environ.get("ATLAS_LIVE_INTERVAL", "30")))
 
 
@@ -45,13 +47,20 @@ async def lifespan(app: FastAPI):
     SVC = Service()
     loop = asyncio.get_running_loop()
 
-    def analyze_items(items):
-        """Har bir yangi xabar uchun model ta'sirini hisoblaydi (alohida oqimda — API bloklanmaydi)."""
+    def analyze_items(items, alert: bool = True):
+        """Har bir yangi xabar uchun model ta'sirini hisoblaydi (alohida oqimda — API bloklanmaydi)
+        va ta'sir kuchli bo'lsa push xabarnoma yuboradi."""
+        import time as _t
+        from ..live.engine import news_alert, news_threshold
+        if _t.time() - _NEWS_THR["at"] > 600:
+            _NEWS_THR["value"], _NEWS_THR["at"] = news_threshold(SVC.store), _t.time()
         for it in items:
             try:
                 imp = SVC.quick_impact(it["title"])
                 it["impact"] = json.dumps(imp)
                 SVC.store.set_impact(it["id"], it["impact"])
+                if alert and os.environ.get("ATLAS_SIGNALS", "1") == "1":
+                    news_alert(it, imp, _NEWS_THR["value"])
             except Exception as e:  # tahlil xatosi lentani to'xtatmasin
                 log.warning("Ta'sir hisoblanmadi: %s", e)
         return items
@@ -69,10 +78,16 @@ async def lifespan(app: FastAPI):
     if SVC.ready:   # bazadagi ta'siri hisoblanmagan so'nggi xabarlar
         backlog = [it for it in SVC.store.recent(60) if not it.get("impact")]
         if backlog:
-            loop.create_task(asyncio.to_thread(analyze_items, backlog))
+            loop.create_task(asyncio.to_thread(analyze_items, backlog, False))   # eski xabarlar uchun push yo'q
 
     if os.environ.get("ATLAS_LIVE", "1") == "1":
         LIVE.start()   # jonli narxlar (Binance + Yahoo), alohida oqimda
+
+    global ENGINE
+    if os.environ.get("ATLAS_SIGNALS", "1") == "1":
+        from ..live.engine import LiveEngine
+        ENGINE = LiveEngine(SVC.store, interval=int(os.environ.get("ATLAS_SIGNALS_INTERVAL", "60")))
+        ENGINE.start()
 
     task = None
     if os.environ.get("ATLAS_COLLECT", "1") == "1":
@@ -81,6 +96,8 @@ async def lifespan(app: FastAPI):
         task = asyncio.create_task(COLLECTOR.run_forever())
     yield
     LIVE.stop()
+    if ENGINE:
+        ENGINE.stop()
     if task:
         task.cancel()
 
@@ -210,6 +227,16 @@ def ta(symbol: str):
         raise HTTPException(404, "Aktiv topilmadi")
     fc = s.forecast([symbol]).get(symbol)
     return analysis(symbol, s.prices, fc)
+
+
+@app.get("/api/signals")
+def signals():
+    """Jonli signallar: oltin 5m–4h va kuchli yangiliklar, natijalari bilan."""
+    from ..live.engine import summary
+    out = summary()
+    out["engine"] = {"running": ENGINE is not None, "last_run": getattr(ENGINE, "last_run", None),
+                     "error": getattr(ENGINE, "last_error", None)}
+    return out
 
 
 @app.get("/api/strategies")

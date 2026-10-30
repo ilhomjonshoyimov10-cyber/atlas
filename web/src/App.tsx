@@ -12,8 +12,9 @@ import Backtest from "./components/Backtest";
 import TrackRecord from "./components/TrackRecord";
 import TechAnalysis from "./components/TechAnalysis";
 import Strategies from "./components/Strategies";
+import SignalsPage from "./components/SignalsPage";
 
-type Page = "asset" | "map" | "strategies" | "backtest" | "track";
+type Page = "asset" | "map" | "signals" | "strategies" | "backtest" | "track";
 
 type Tab = "ta" | "season" | "whatif" | "model";
 const RANGES = [{ y: 0.5, l: "6O" }, { y: 1, l: "1Y" }, { y: 3, l: "3Y" }, { y: 5, l: "5Y" }, { y: 11, l: "Hammasi" }];
@@ -30,7 +31,11 @@ export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [fcAll, setFcAll] = useState<Record<string, Forecast>>({});
-  const [sel, setSel] = useState<string>(() => { try { return localStorage.getItem("sel") || "BTC"; } catch { return "BTC"; } });
+  const [sel, setSel] = useState<string>(() => {
+    const q = new URLSearchParams(location.search).get("sel");   // push xabarnomadan kelgan havola
+    if (q) return q.toUpperCase();
+    try { return localStorage.getItem("sel") || "BTC"; } catch { return "BTC"; }
+  });
   const [bars, setBars] = useState<Bar[]>([]);
   const [fc, setFc] = useState<Forecast | null>(null);
   const [years, setYears] = useState(1);
@@ -175,7 +180,7 @@ export default function App() {
           <span>ATLAS</span>
         </div>
         <nav className="pages" aria-label="Bo'limlar">
-          {([["asset", "Aktiv"], ["map", "Bozor xaritasi"], ["strategies", "Strategiyalar"], ["track", "Prognoz jurnali"], ["backtest", "Backtest"]] as [Page, string][]).map(([k, l]) => (
+          {([["asset", "Aktiv"], ["signals", "Signallar"], ["map", "Bozor xaritasi"], ["strategies", "Strategiyalar"], ["track", "Prognoz jurnali"], ["backtest", "Backtest"]] as [Page, string][]).map(([k, l]) => (
             <button key={k} className={page === k ? "on" : ""} aria-current={page === k ? "page" : undefined} onClick={() => setPage(k)}>{l}</button>
           ))}
         </nav>
@@ -235,6 +240,8 @@ export default function App() {
         <main className="main">
           {page === "map" ? (
             <MarketMap assets={assets} fc={fcAll} onPick={pick} />
+          ) : page === "signals" ? (
+            <SignalsPage onPick={pick} />
           ) : page === "strategies" ? (
             <Strategies assets={assets} onAnalyze={analyzeAsset} />
           ) : page === "track" ? (

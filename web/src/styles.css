@@ -370,3 +370,16 @@ code { font-size: 0.9em; background: var(--line); padding: 1px 5px; border-radiu
 .tv-frame { height: 520px; width: 100%; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
 .tv-box { height: 100%; width: 100%; }
 @media (max-width: 760px) { .candle-chart { height: 340px; } .tv-frame { height: 440px; } .mode-sw { margin-left: 0; } }
+
+/* ---- Jonli signallar ---- */
+.sig h1 { font: 500 26px/1.2 var(--display); margin: 0 0 12px; letter-spacing: -0.02em; }
+.sig h3 { font-size: 15px; margin: 22px 0 8px; }
+.sig-sub { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; padding: 6px 0 4px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.sig-big { font: 500 30px/1.1 var(--display); margin: 2px 0; }
+.sig-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.sig-list li { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+.sig-list li small { color: var(--muted); font-size: 12px; }
+.sig-list li.sig-gold.up { border-left: 3px solid var(--up); } .sig-list li.sig-gold.down { border-left: 3px solid var(--down); }
+.sig-list li.fresh { border-color: var(--fc); }
+.sig-news span { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 760px) { .sig-sub { grid-template-columns: 1fr; gap: 0; } }

@@ -248,6 +248,11 @@ def export_site(svc, collector_stats: dict | None = None, price_stats: dict | No
     _write("ta/index.json", {s: {"bias": x["bias"], "score": x["score"], "confidence": x["confidence"]}
                              for s, x in analyses.items()})
     _write("strategies.json", strategies(today_signals(analyses)))
+    try:
+        from .live.engine import summary as live_summary
+        _write("signals.json", live_summary())
+    except Exception as e:
+        log.warning("Signallar eksporti: %s", e)
     _write("news.json", svc.store.recent(200))
     _write("report.json", svc.report)
     _write("experiments.json", api.experiments())

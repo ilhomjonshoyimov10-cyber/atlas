@@ -1,0 +1,36 @@
+# Har 5 daqiqada: yangi xabarlar (FinBERT bahosi) + oltin 5m–4h signallari -> ntfy push, jurnal `data` shoxchasida.
+# Kompyuterdagi server ham xuddi shu ishni har daqiqada bajaradi; bu — kompyuter o'chiq paytlar uchun.
+name: Jonli signallar
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+concurrency: { group: atlas-data, cancel-in-progress: false }
+permissions: { contents: write }
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { ref: data, path: state, fetch-depth: 1 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: requirements.txt }
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt
+      - uses: actions/cache@v4
+        with: { path: ~/.cache/huggingface, key: hf-finbert-v1 }
+      - name: Signallar
+        run: python -m atlas.cli live --once
+        env: { ATLAS_DATA: state }
+      - name: data shoxchasiga yozish
+        run: |
+          cd state
+          python -c "import json,sys; sys.path.insert(0,'..'); from atlas.live.engine import summary; open('site/signals.json','w').write(json.dumps(summary(), ensure_ascii=False, default=str))"
+          git config user.name "atlas-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan snapshot
+          git add -A
+          git commit -qm "signals $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf origin snapshot:data
+        env: { ATLAS_DATA: . }

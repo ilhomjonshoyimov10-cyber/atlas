@@ -29,7 +29,7 @@ HOLDOUT_DAYS, EMBARGO_DAYS = 365, 30
 
 
 class SetupNet(nn.Module):
-    def __init__(self, n_tab: int, hidden: int = 48, dropout: float = 0.2):
+    def __init__(self, n_tab: int, hidden: int = 48, dropout: float = 0.2, n_groups: int | None = None):
         super().__init__()
         c = 5
         self.conv = nn.Sequential(
@@ -39,7 +39,7 @@ class SetupNet(nn.Module):
         )
         self.att = nn.Linear(hidden, 1)
         self.setup_emb = nn.Embedding(len(SETUP_NAMES), 16)
-        self.group_emb = nn.Embedding(len(GROUPS), 8)
+        self.group_emb = nn.Embedding(n_groups or len(GROUPS), 8)   # aktiv guruhi (kunlik) yoki vaqt oralig'i (ichki kun)
         self.head = nn.Sequential(nn.Linear(hidden * 2 + 16 + 8 + n_tab, 64), nn.GELU(), nn.Dropout(dropout),
                                   nn.Linear(64, 1))
 
@@ -61,17 +61,18 @@ class Data:
     y: torch.Tensor
 
 
-def to_tensors(ds: dict, idx: np.ndarray) -> Data:
+def to_tensors(ds: dict, idx: np.ndarray, groups: list[str] | None = None) -> Data:
+    groups = groups or GROUPS
     m = ds["meta"].iloc[idx]
     return Data(torch.from_numpy(ds["seq"][idx]), torch.from_numpy(ds["tab"][idx]),
                 torch.tensor([SETUP_NAMES.index(s) for s in m["setup"]]),
-                torch.tensor([GROUPS.index(g) for g in m["group"]]),
+                torch.tensor([groups.index(g) for g in m["group"]]),
                 torch.tensor(np.nan_to_num(m["win"].to_numpy(float)), dtype=torch.float32))
 
 
-def _fit_one(tr: Data, va: Data, seed: int, epochs: int = 30, lr: float = 2e-3) -> SetupNet:
+def _fit_one(tr: Data, va: Data, seed: int, epochs: int = 30, lr: float = 2e-3, n_groups: int | None = None) -> SetupNet:
     torch.manual_seed(seed)
-    net = SetupNet(tr.tab.shape[1])
+    net = SetupNet(tr.tab.shape[1], n_groups=n_groups)
     opt = torch.optim.AdamW(net.parameters(), lr=lr, weight_decay=1e-3)
     best, best_state, bad = 1e9, None, 0
     n = len(tr.y)

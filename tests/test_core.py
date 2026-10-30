@@ -247,3 +247,33 @@ def test_ta_analyze_runs():
     a = analyze("GOLD", {"GOLD": _ohlc()})
     assert a["bias"] in ("ko'tarilish", "pasayish", "neytral") and a["text"]
     assert all(l["type"] in ("support", "resistance") for l in a["levels"])
+
+
+# ---------------- jonli signallar ----------------
+def test_signal_outcome_scoring(tmp_path, monkeypatch):
+    import json
+
+    import pandas as pd
+
+    import atlas.live.engine as E
+
+    monkeypatch.setattr(E, "SIGNALS_LOG", tmp_path / "s.jsonl")
+    t0 = pd.Timestamp("2026-10-30 10:00")
+    E.journal({"kind": "gold", "tf": "1h", "time": str(t0), "dir": 1, "tp": 103.0, "sl": 99.0, "status": "ochiq", "strong": True})
+    E.journal({"kind": "gold", "tf": "1h", "time": str(t0), "dir": -1, "tp": 97.0, "sl": 101.0, "status": "ochiq", "strong": True})
+    bars = pd.DataFrame({"date": [t0 + pd.Timedelta(hours=k) for k in range(1, 4)],
+                         "open": [100, 101, 102.5], "high": [100.5, 102, 103.5], "low": [99.5, 100.5, 102], "close": [100, 101.5, 103]})
+    assert E.score_open({"1h": bars}) == 2
+    st = [r["status"] for r in E.read_journal()]
+    assert st == ["maqsad", "stop"]                      # long maqsadga yetdi, short stop urildi
+    assert E.summary()["live"] == {"strong": 2, "closed": 2, "tp": 1, "sl": 1}
+
+
+def test_news_alert_only_when_strong(tmp_path, monkeypatch):
+    import atlas.live.engine as E
+
+    monkeypatch.setattr(E, "SIGNALS_LOG", tmp_path / "s.jsonl")
+    weak = [{"symbol": "GOLD", "name": "Oltin", "tagged": True, "ret_h1": 0.001, "ret_h5": 0.002, "sigma_h1": 0.01}]
+    assert E.news_alert({"title": "Company opens new office", "event": "none"}, weak, thr=0.1, push_enabled=False) is None
+    e = E.news_alert({"title": "Fed raises rates", "event": "fomc"}, weak, thr=0.1, push_enabled=False)
+    assert e is not None and e["event"] == "fomc"        # muhim makro voqea — kuchsiz bo'lsa ham xabar
