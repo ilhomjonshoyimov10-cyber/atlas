@@ -356,3 +356,16 @@ code { font-size: 0.9em; background: var(--line); padding: 1px 5px; border-radiu
 @media (max-width: 760px) { .layout { grid-template-columns: minmax(0, 1fr); } .main { min-width: 0; } }
 .pages { overflow-x: auto; scrollbar-width: none; min-width: 0; }
 .pages button { white-space: nowrap; flex-shrink: 0; }
+
+/* ---- Sham grafigi (TradingView Lightweight Charts) va TradingView vidjeti ---- */
+.ranges { align-items: center; flex-wrap: wrap; }
+.mode-sw { margin-left: auto; display: inline-flex; gap: 2px; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 2px; }
+.mode-sw button { padding: 4px 10px; }
+.candle-wrap { position: relative; }
+.candle-chart { height: 420px; width: 100%; }
+.candle-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.candle-legend i { display: inline-block; width: 18px; height: 0; border-top: 2px dashed var(--fc); vertical-align: middle; margin-right: 4px; }
+.candle-legend i.lg-s { border-top-color: var(--up); } .candle-legend i.lg-r { border-top-color: var(--down); }
+.candle-legend i.lg-live { width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--up); }
+.tv-box { height: 520px; width: 100%; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
+@media (max-width: 760px) { .candle-chart { height: 340px; } .tv-box { height: 440px; } .mode-sw { margin-left: 0; } }

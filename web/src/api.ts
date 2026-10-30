@@ -113,8 +113,8 @@ export const api = {
   assets: () => STATIC ? once<AssetRow[]>("assets.json") : get<AssetRow[]>("/api/assets"),
   history: async (s: string, years = 10): Promise<{ rows: Bar[] }> => {
     if (!STATIC) return get<{ rows: Bar[] }>(`/api/history/${s}?years=${years}`);
-    const d = await once<{ t: string[]; c: number[] }>(`history/${s}.json`, 600000);
-    return { rows: d.t.map((t, i) => ({ t, close: d.c[i] })) };
+    const d = await once<{ t: string[]; o?: number[]; h?: number[]; l?: number[]; c: number[] }>(`history/${s}.json`, 600000);
+    return { rows: d.t.map((t, i) => ({ t, open: d.o?.[i], high: d.h?.[i], low: d.l?.[i], close: d.c[i] })) };
   },
   forecast: (s: string) => STATIC ? once<Forecast>(`forecast/${s}.json`) : get<Forecast>(`/api/forecast/${s}`),
   forecastAll: () => STATIC ? once<Record<string, Forecast>>("forecast.json") : get<Record<string, Forecast>>("/api/forecast"),

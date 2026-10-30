@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, AssetRow, Bar, Forecast, fmtPct, fmtPrice, Group, GROUP_NAMES, Health, NewsItem, STATIC, TA, timeAgo } from "./api";
 import PriceChart from "./components/PriceChart";
+import CandleChart from "./components/CandleChart";
+import TradingViewWidget from "./components/TradingViewWidget";
 import Seasonality from "./components/Seasonality";
 import NewsFeed from "./components/NewsFeed";
 import WhatIf from "./components/WhatIf";
@@ -34,6 +36,10 @@ export default function App() {
   const [years, setYears] = useState(1);
   const [tab, setTab] = useState<Tab>("ta");
   const [ta, setTa] = useState<TA | null>(null);
+  const [chartMode, setChartMode] = useState<"candle" | "line" | "tv">(() => {
+    try { return (localStorage.getItem("chartMode") as "candle" | "line" | "tv") || "candle"; } catch { return "candle"; }
+  });
+  const pickMode = (m: "candle" | "line" | "tv") => { setChartMode(m); try { localStorage.setItem("chartMode", m); } catch { /* yo'q */ } };
   const [page, setPage] = useState<Page>("asset");
   const [news, setNews] = useState<NewsItem[]>([]);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
@@ -250,11 +256,19 @@ export default function App() {
                 </div>
               </div>
               <div className="ranges" role="group" aria-label="Davr">
-                {RANGES.map((r) => (
+                {chartMode !== "tv" && RANGES.map((r) => (
                   <button key={r.l} className={years === r.y ? "on" : ""} onClick={() => setYears(r.y)}>{r.l}</button>
                 ))}
+                <span className="mode-sw" role="group" aria-label="Grafik turi">
+                  {([["candle", "Shamlar"], ["line", "Chiziq"], ["tv", "TradingView jonli"]] as const).map(([k, l]) => (
+                    <button key={k} className={chartMode === k ? "on" : ""} onClick={() => pickMode(k)}>{l}</button>
+                  ))}
+                </span>
               </div>
-              {bars.length ? <PriceChart bars={bars} forecast={fc} years={years} ta={tab === "ta" ? ta : null} /> : <div className="skeleton" style={{ height: 380 }} />}
+              {chartMode === "tv" ? <TradingViewWidget symbol={sel} />
+                : !bars.length ? <div className="skeleton" style={{ height: 380 }} />
+                : chartMode === "candle" ? <CandleChart bars={bars} forecast={fc} years={years} ta={tab === "ta" ? ta : null} live={live[sel] ?? null} />
+                : <PriceChart bars={bars} forecast={fc} years={years} ta={tab === "ta" ? ta : null} />}
 
               {fc && (
                 <div className="horizons">

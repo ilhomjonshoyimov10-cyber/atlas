@@ -226,9 +226,12 @@ def export_site(svc, collector_stats: dict | None = None, price_stats: dict | No
         _write(f"forecast/{a.symbol}.json", api.forecast_one(a.symbol))
         df = svc.prices[a.symbol]
         df = df[df["date"] >= df["date"].max() - pd.Timedelta(days=int(365.25 * 11))]
-        # ixcham ustunli format (grafik faqat yopilish narxini chizadi): t — sanalar, c — yopilish
+        # ixcham ustunli format: t — sanalar, o/h/l/c — sham narxlari (TradingView uslubidagi grafik uchun)
+        from .ta.detect import sanitize_ohlc
+        df = sanitize_ohlc(df) if {"open", "high", "low"} <= set(df.columns) else df
+        r6 = lambda col: [float(f"{v:.6g}") for v in (df[col] if col in df.columns else df["close"])]
         _write(f"history/{a.symbol}.json", {"symbol": a.symbol, "t": [str(d.date()) for d in df["date"]],
-                                            "c": [float(f"{v:.6g}") for v in df["close"]]})
+                                            "o": r6("open"), "h": r6("high"), "l": r6("low"), "c": r6("close")})
         for by in ("month", "week", "dow"):
             _write(f"seasonality/{a.symbol}_{by}.json", api.seasonality(a.symbol, by))
     # texnik tahlil (SNR/SND/figuralar + SetupNet) — barcha aktivlar
