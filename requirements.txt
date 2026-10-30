@@ -1,0 +1,16 @@
+# Asosiy
+numpy>=1.26
+pandas>=2.1
+pyarrow>=14
+scikit-learn>=1.3
+torch>=2.2
+# Ma'lumot
+yfinance>=0.2.40
+feedparser>=6.0
+httpx>=0.27
+# Yangilik embedding (FinBERT)
+transformers>=4.40
+# API
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6

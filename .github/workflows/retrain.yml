@@ -1,0 +1,39 @@
+# Har yakshanba: yangi narx va yangiliklar bilan modelni noldan qayta o'qitish
+# (walk-forward baholash + holdout + backtest), so'ng saytni yangilash.
+name: Modelni qayta o'qitish
+on:
+  schedule:
+    - cron: "23 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      gdelt_days: { description: "GDELT dan necha kunlik yangilik qo'shilsin", default: "7" }
+concurrency: { group: atlas-data, cancel-in-progress: false }
+permissions: { contents: write }
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { ref: data, path: state, fetch-depth: 1 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: requirements.txt }
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt
+      - uses: actions/cache@v4
+        with: { path: ~/.cache/huggingface, key: hf-finbert-v1 }
+      - name: Qayta o'qitish
+        run: python -m atlas.cli real --embedder finbert --gdelt-days ${{ inputs.gdelt_days || '7' }}
+        env: { ATLAS_DATA: state }
+      - name: Saytni yangilash
+        run: python -m atlas.cli cloud-update --skip-news
+        env: { ATLAS_DATA: state }
+      - name: data shoxchasiga yozish
+        run: |
+          cd state
+          git config user.name "atlas-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan snapshot
+          git add -A
+          git commit -qm "retrain $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf origin snapshot:data

@@ -1,0 +1,9 @@
+services:
+  atlas:
+    build: .
+    ports: ["8000:8000"]
+    volumes: ["./data:/data"]
+    environment:
+      ATLAS_COLLECT: "1"            # yangilik kollektori API ichida ishlaydi
+      ATLAS_COLLECT_INTERVAL: "60"
+    restart: unless-stopped
