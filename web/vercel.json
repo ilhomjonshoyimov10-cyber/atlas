@@ -3,7 +3,21 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "regions": ["fra1"],
-  "functions": { "api/quotes.js": { "maxDuration": 15 } },
-  "rewrites": [{ "source": "/((?!api/|assets/).*)", "destination": "/index.html" }]
+  "regions": [
+    "fra1"
+  ],
+  "functions": {
+    "api/quotes.js": {
+      "maxDuration": 15
+    },
+    "api/bars.js": {
+      "maxDuration": 20
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/((?!api/|assets/).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
