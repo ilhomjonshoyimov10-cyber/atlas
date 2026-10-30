@@ -191,3 +191,59 @@ def test_backtest_rows_remap_after_new_days():
 
     rows = remap_rows(P, np.array([1, 0, 1]), pd.to_datetime(["2026-01-02", "2026-01-03", "2026-02-01"]).values)
     assert rows.tolist() == [4, 2, -1]
+
+
+# ---------------- texnik tahlil ----------------
+def _ohlc(n=700, seed=3):
+    import numpy as np
+    import pandas as pd
+    rng = np.random.default_rng(seed)
+    c = 100 * np.exp(np.cumsum(rng.normal(0, 0.012, n)))
+    o = np.r_[c[0], c[:-1]]
+    h = np.maximum(o, c) * (1 + rng.uniform(0, 0.01, n))
+    l = np.minimum(o, c) * (1 - rng.uniform(0, 0.01, n))
+    return pd.DataFrame({"date": pd.bdate_range("2020-01-01", periods=n), "open": o, "high": h, "low": l,
+                         "close": c, "volume": rng.integers(1000, 5000, n)})
+
+
+def test_ta_no_lookahead():
+    """t kungi signallar va darajalar kelajakdagi barlar o'zgarsa ham o'zgarmasligi kerak."""
+    from atlas.ta.detect import indicators, levels_at, pivots, scan
+
+    df = _ohlc()
+    cut = 550
+    future = df.copy()
+    future.loc[cut + 1:, ["open", "high", "low", "close"]] *= 1.3     # kelajakni butunlay o'zgartiramiz
+    ev_a = [e for e in scan(df)[0] if e["t"] <= cut]
+    ev_b = [e for e in scan(future)[0] if e["t"] <= cut]
+    assert [(e["t"], e["setup"]) for e in ev_a] == [(e["t"], e["setup"]) for e in ev_b]
+    atr = indicators(df)["atr"].to_numpy()
+    la = levels_at(pivots(df), cut, atr[cut], df["close"].iat[cut])
+    lb = levels_at(pivots(future), cut, atr[cut], df["close"].iat[cut])
+    assert la == lb
+
+
+def test_barrier_labels():
+    import numpy as np
+    import pandas as pd
+
+    from atlas.ta.dataset import HORIZON, barrier_outcomes
+
+    n = 40
+    c = np.full(n, 100.0)
+    c[3:] = 103.0                                   # 1-kundan keyin keskin o'sish
+    df = pd.DataFrame({"open": c, "high": c + 0.1, "low": c - 0.1, "close": c})
+    atr = np.full(n, 2.0)
+    win_l, R_l = barrier_outcomes(df, atr, 1)
+    win_s, R_s = barrier_outcomes(df, atr, -1)
+    assert win_l[0] == 1 and R_l[0] == 1.5          # long: +1.5 ATR (103 >= 100+3) maqsadi urildi
+    assert win_s[0] == 0 and R_s[0] == -1.0         # short: stop urildi
+    assert np.isnan(win_l[n - HORIZON])             # muddat to'lmagan — noma'lum
+
+
+def test_ta_analyze_runs():
+    from atlas.ta.analyze import analyze
+
+    a = analyze("GOLD", {"GOLD": _ohlc()})
+    assert a["bias"] in ("ko'tarilish", "pasayish", "neytral") and a["text"]
+    assert all(l["type"] in ("support", "resistance") for l in a["levels"])

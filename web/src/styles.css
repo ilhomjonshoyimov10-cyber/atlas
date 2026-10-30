@@ -314,3 +314,45 @@ code { font-size: 0.9em; background: var(--line); padding: 1px 5px; border-radiu
   .top { flex-wrap: wrap; row-gap: 6px; }
   .status { order: 4; width: 100%; font-size: 12px; flex-wrap: wrap; }
 }
+
+/* ---- Texnik tahlil ---- */
+.analyze-btn { margin-left: auto; margin-right: 18px; align-self: center; }
+.ta-verdict { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.ta-bias { font: 500 26px/1.2 var(--display); margin: 2px 0; letter-spacing: -0.02em; }
+.ta-gauge { position: relative; width: 220px; max-width: 40%; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--down), var(--line) 50%, var(--up)); }
+.ta-gauge span { position: absolute; top: -5px; width: 4px; height: 18px; margin-left: -2px; background: var(--ink); border-radius: 2px; }
+.ta-text { margin: 14px 0; padding-left: 20px; display: grid; gap: 6px; line-height: 1.55; }
+.ta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin: 8px 0 18px; }
+.ta h3 { font-size: 15px; margin: 18px 0 8px; }
+.metrics.compact td, .metrics.compact th { padding: 5px 8px; }
+.ta-now td, .ta-now th { font-weight: 600; background: color-mix(in srgb, var(--fc) 10%, transparent); }
+.ta-zones, .ta-factors { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ta-zones li { padding: 6px 10px; border-left: 3px solid var(--line); background: var(--surface); border-radius: 4px; }
+.ta-zones li.demand { border-left-color: var(--up); } .ta-zones li.supply { border-left-color: var(--down); }
+.ta-zones small, .ta-factors small { display: block; color: var(--muted); font-size: 12px; }
+.ta-factors li { display: grid; grid-template-columns: 16px 1fr; column-gap: 6px; }
+.ta-factors small { grid-column: 2; }
+.ta-zone.demand { fill: var(--up); opacity: 0.13; } .ta-zone.supply { fill: var(--down); opacity: 0.13; }
+.ta-level { stroke-width: 1.2; stroke-dasharray: 5 4; }
+.ta-level.support { stroke: var(--up); } .ta-level.resistance { stroke: var(--down); }
+.ta-label { font-size: 11px; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.ta-label.support { fill: var(--up); } .ta-label.resistance { fill: var(--down); }
+.strat h1 { font: 500 26px/1.2 var(--display); margin: 0 0 12px; letter-spacing: -0.02em; }
+.ask { display: flex; gap: 8px; margin: 0 0 14px; }
+.ask input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--ink); font: inherit; }
+.strat h3 { font-size: 15px; margin: 22px 0 8px; }
+@media (max-width: 760px) {
+  .ta-grid { grid-template-columns: 1fr; gap: 0; }
+  .ta-verdict { flex-direction: column; align-items: flex-start; }
+  .ta-gauge { width: 100%; max-width: none; }
+  .analyze-btn { margin: 8px 0; order: 3; }
+  .asset-head { flex-wrap: wrap; }
+}
+.metrics td { white-space: nowrap; }
+.tabs { overflow-x: auto; scrollbar-width: none; }
+.tabs button { white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 760px) { .layout { grid-template-columns: minmax(0, 1fr); } .main { min-width: 0; } }
+.pages { overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.pages button { white-space: nowrap; flex-shrink: 0; }

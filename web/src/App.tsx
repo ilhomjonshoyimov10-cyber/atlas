@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, AssetRow, Bar, Forecast, fmtPct, fmtPrice, Group, GROUP_NAMES, Health, NewsItem, STATIC, timeAgo } from "./api";
+import { api, AssetRow, Bar, Forecast, fmtPct, fmtPrice, Group, GROUP_NAMES, Health, NewsItem, STATIC, TA, timeAgo } from "./api";
 import PriceChart from "./components/PriceChart";
 import Seasonality from "./components/Seasonality";
 import NewsFeed from "./components/NewsFeed";
@@ -8,10 +8,12 @@ import ModelReport from "./components/ModelReport";
 import MarketMap from "./components/MarketMap";
 import Backtest from "./components/Backtest";
 import TrackRecord from "./components/TrackRecord";
+import TechAnalysis from "./components/TechAnalysis";
+import Strategies from "./components/Strategies";
 
-type Page = "asset" | "map" | "backtest" | "track";
+type Page = "asset" | "map" | "strategies" | "backtest" | "track";
 
-type Tab = "season" | "whatif" | "model";
+type Tab = "ta" | "season" | "whatif" | "model";
 const RANGES = [{ y: 0.5, l: "6O" }, { y: 1, l: "1Y" }, { y: 3, l: "3Y" }, { y: 5, l: "5Y" }, { y: 11, l: "Hammasi" }];
 const ORDER: Group[] = ["crypto", "forex", "index", "equity", "energy", "agri", "metal", "rates"];
 
@@ -30,7 +32,8 @@ export default function App() {
   const [bars, setBars] = useState<Bar[]>([]);
   const [fc, setFc] = useState<Forecast | null>(null);
   const [years, setYears] = useState(1);
-  const [tab, setTab] = useState<Tab>("season");
+  const [tab, setTab] = useState<Tab>("ta");
+  const [ta, setTa] = useState<TA | null>(null);
   const [page, setPage] = useState<Page>("asset");
   const [news, setNews] = useState<NewsItem[]>([]);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
@@ -59,7 +62,8 @@ export default function App() {
 
   useEffect(() => {
     try { localStorage.setItem("sel", sel); } catch { /* storage yo'q */ }
-    setBars([]); setFc(null);
+    setBars([]); setFc(null); setTa(null);
+    api.ta(sel).then(setTa).catch(() => setTa(null));
     api.history(sel, 11).then((d) => setBars(d.rows)).catch((e) => setErr(e.message));
     api.forecast(sel).then(setFc).catch(() => setFc(null));
   }, [sel]);
@@ -146,6 +150,11 @@ export default function App() {
 
   const pick = (s: string) => { setSel(s); setPage("asset"); window.scrollTo({ top: 0 }); };
 
+  const analyzeAsset = (s: string) => {
+    setSel(s); setPage("asset"); setTab("ta");
+    setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
+
   const analyze = (n: NewsItem) => {
     setPage("asset");
     setSeed({ id: n.id, text: n.title }); setTab("whatif");
@@ -160,7 +169,7 @@ export default function App() {
           <span>ATLAS</span>
         </div>
         <nav className="pages" aria-label="Bo'limlar">
-          {([["asset", "Aktiv"], ["map", "Bozor xaritasi"], ["track", "Prognoz jurnali"], ["backtest", "Backtest"]] as [Page, string][]).map(([k, l]) => (
+          {([["asset", "Aktiv"], ["map", "Bozor xaritasi"], ["strategies", "Strategiyalar"], ["track", "Prognoz jurnali"], ["backtest", "Backtest"]] as [Page, string][]).map(([k, l]) => (
             <button key={k} className={page === k ? "on" : ""} aria-current={page === k ? "page" : undefined} onClick={() => setPage(k)}>{l}</button>
           ))}
         </nav>
@@ -220,6 +229,8 @@ export default function App() {
         <main className="main">
           {page === "map" ? (
             <MarketMap assets={assets} fc={fcAll} onPick={pick} />
+          ) : page === "strategies" ? (
+            <Strategies assets={assets} onAnalyze={analyzeAsset} />
           ) : page === "track" ? (
             <TrackRecord onPick={pick} />
           ) : page === "backtest" ? (
@@ -232,6 +243,7 @@ export default function App() {
                   <p className="sub"><span>{GROUP_NAMES[cur.group]}</span><span>{cur.symbol}</span>
                     <span>Oxirgi kunlik yopilish {cur.date}</span>{live[sel] && <span className="live" title={liveSrc[sel]}>● Jonli narx: {liveSrc[sel]}</span>}</p>
                 </div>
+                <button className="btn analyze-btn" onClick={() => analyzeAsset(sel)}>Analiz qil</button>
                 <div className="bigprice">
                   <span className="num">{fmtPrice(price)}</span>
                   <span className={chg >= 0 ? "pos" : "neg"}>{fmtPct(chg)}</span>
@@ -242,7 +254,7 @@ export default function App() {
                   <button key={r.l} className={years === r.y ? "on" : ""} onClick={() => setYears(r.y)}>{r.l}</button>
                 ))}
               </div>
-              {bars.length ? <PriceChart bars={bars} forecast={fc} years={years} /> : <div className="skeleton" style={{ height: 380 }} />}
+              {bars.length ? <PriceChart bars={bars} forecast={fc} years={years} ta={tab === "ta" ? ta : null} /> : <div className="skeleton" style={{ height: 380 }} />}
 
               {fc && (
                 <div className="horizons">
@@ -294,11 +306,12 @@ export default function App() {
               )}
 
               <div className="tabs" ref={tabsRef} role="tablist">
-                {([["season", "Mavsumiylik"], ["whatif", "Yangilik ta'siri"], ["model", "Model sifati"]] as [Tab, string][]).map(([k, l]) => (
+                {([["ta", "Texnik tahlil"], ["season", "Mavsumiylik"], ["whatif", "Yangilik ta'siri"], ["model", "Model sifati"]] as [Tab, string][]).map(([k, l]) => (
                   <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>
                 ))}
               </div>
               <div className="tab-body" role="tabpanel">
+                {tab === "ta" && <TechAnalysis ta={ta} onPickLevel={() => window.scrollTo({ top: 0, behavior: "smooth" })} />}
                 {tab === "season" && <Seasonality symbol={sel} name={cur.name} />}
                 {tab === "whatif" && <WhatIf seed={seed} news={news} onPick={pick} />}
                 {tab === "model" && <ModelReport />}

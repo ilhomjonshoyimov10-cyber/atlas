@@ -231,6 +231,20 @@ def export_site(svc, collector_stats: dict | None = None, price_stats: dict | No
                                             "c": [float(f"{v:.6g}") for v in df["close"]]})
         for by in ("month", "week", "dow"):
             _write(f"seasonality/{a.symbol}_{by}.json", api.seasonality(a.symbol, by))
+    # texnik tahlil (SNR/SND/figuralar + SetupNet) — barcha aktivlar
+    from .ta.service import analysis, strategies, today_signals
+    shutil.rmtree(SITE / "ta", ignore_errors=True)
+    analyses = {}
+    for a in ASSETS:
+        if a.symbol in svc.prices:
+            try:
+                analyses[a.symbol] = analysis(a.symbol, svc.prices, fc.get(a.symbol))
+                _write(f"ta/{a.symbol}.json", analyses[a.symbol])
+            except Exception as e:   # bitta aktiv xatosi eksportni to'xtatmasin
+                log.warning("%s texnik tahlili: %s", a.symbol, e)
+    _write("ta/index.json", {s: {"bias": x["bias"], "score": x["score"], "confidence": x["confidence"]}
+                             for s, x in analyses.items()})
+    _write("strategies.json", strategies(today_signals(analyses)))
     _write("news.json", svc.store.recent(200))
     _write("report.json", svc.report)
     _write("experiments.json", api.experiments())

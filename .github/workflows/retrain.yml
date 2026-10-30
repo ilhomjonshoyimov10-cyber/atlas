@@ -25,6 +25,9 @@ jobs:
       - name: Qayta o'qitish
         run: python -m atlas.cli real --embedder finbert --gdelt-days ${{ inputs.gdelt_days || '7' }}
         env: { ATLAS_DATA: state }
+      - name: Texnik tahlil modeli (SNR/SND/figuralar dataseti + SetupNet)
+        run: python -m atlas.cli ta-train
+        env: { ATLAS_DATA: state }
       - name: Saytni yangilash
         run: python -m atlas.cli cloud-update --skip-news
         env: { ATLAS_DATA: state }

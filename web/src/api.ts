@@ -75,6 +75,36 @@ export interface Track {
   summary: { h: number; n: number; coverage90: number; direction: number | null; mae_pct: number }[];
   recent: TrackRow[]; pending: number; started: string | null;
 }
+export interface TALevel { price: number; type: "support" | "resistance"; touches: number; strength: number; last: string; dist_pct: number; dist_atr: number }
+export interface TAZone { kind: "demand" | "supply"; lo: number; hi: number; born: string; from: string; tests: number; impulse_atr: number; dist_atr: number }
+export interface TASetup {
+  setup: string; label: string; family: string; dir: number; date: string; level: number | null;
+  p_model: number | null; base_win: number | null; n_hist: number | null; hist_excess_R: number | null; hist_p_holm: number | null;
+  holdout_win: number | null; strong: boolean; entry: number; tp: number; sl: number;
+}
+export interface TA {
+  symbol: string; name: string; as_of: string; close: number; atr: number;
+  structure: { trend: string; last_high: number | null; last_low: number | null; bos_up?: boolean; bos_down?: boolean };
+  levels: TALevel[]; zones: TAZone[]; setups: TASetup[];
+  patterns: { name: string; label: string; dir: number; neck: number; target: number; date: string }[];
+  indicators: { rsi: number; macd_hist: number; sma50: number; sma200: number | null; bb_pctb: number | null; candle: string | null };
+  factors: { name: string; score: number; weight: number; note: string }[];
+  score: number; bias: string; confidence: string; text: string[]; disclaimer: string;
+}
+export interface StratRow {
+  setup: string; name: string; family: string; dir: number; n: number; win_rate?: number; avg_R?: number;
+  base_R?: number; excess_R?: number; p_holm?: number;
+}
+export interface Strategies {
+  ready: boolean; holdout_start: string; holdout_end: string; n_train: number; n_holdout: number;
+  auc: number; auc_baseline: number; brier_skill: number; holdout_win_rate: number;
+  filter: Record<"all" | "top30" | "bottom30", { n: number; avg_R: number; excess_R: number; win_rate: number }>;
+  stats_train: StratRow[]; stats_holdout: StratRow[];
+  per_setup_holdout: { setup: string; n: number; win_all: number; n_top: number; win_top: number | null; auc: number }[];
+  dataset: { n_events: number; n_labeled: number; assets: number; from: string; to: string };
+  rules: { tp_atr: number; sl_atr: number; horizon: number };
+  today?: { symbol: string; name: string; setup: string; label: string; dir: number; p_model: number | null; base_win: number | null; strong: boolean; entry: number; tp: number; sl: number }[];
+}
 export type Quotes = { quotes: Record<string, { symbol: string; price: number; change_pct: number | null; time: string; source: string }>; error: string | null };
 
 export const api = {
@@ -100,6 +130,8 @@ export const api = {
   backtest: (thr: number, cost: number) => STATIC
     ? once<any>(`backtest/t${thr.toFixed(2)}_c${cost}.json`, 3600000)
     : get<any>(`/api/backtest?threshold=${thr}&cost_bps=${cost}`),
+  ta: (s: string) => STATIC ? once<TA>(`ta/${s}.json`) : get<TA>(`/api/ta/${s}`),
+  strategies: () => STATIC ? once<Strategies>("strategies.json") : get<Strategies>("/api/strategies"),
   /** Statik rejimda faqat lentadagi xabarlar uchun oldindan hisoblangan tahlil mavjud. */
   analyzeNews: (id: string) => once<Analysis>(`analysis/${id}.json`, 3600000),
   analyze: async (text: string): Promise<Analysis> => {

@@ -54,6 +54,24 @@ yozib boriladi va muddati kelgach haqiqiy narx bilan solishtiriladi. Natijalar t
 Eslatma: GitHub ochiq repoda 60 kun hech qanday commit bo'lmasa rejalashtirilgan ishlarni to'xtatadi. Shunday bo'lsa,
 Actions sahifasida "Enable workflow" tugmasini bosing.
 
+## Texnik tahlil va strategiyalar (SNR, SND, klassika) + SetupNet
+
+"Analiz qil" tugmasi (yoki `python -m atlas.cli ta GOLD`) tanlangan aktiv uchun yozma tahlil beradi: bozor tuzilmasi
+(HH/HL, BOS), support/resistance darajalari, supply/demand zonalari, klassik figuralar, indikatorlar, faol signallar,
+har bir signalning tarixiy natijasi, deep learning bahosi va ATLAS prognozi bilan birga umumiy xulosa.
+
+| Qism | Fayl |
+|---|---|
+| Detektorlar: pivotlar (K bar keyin tasdiqlanadi), SNR klasterlari, SND zonalari, tuzilma, qo'sh cho'qqi/tub, bosh-yelka, uchburchaklar, RSI, MA kesishishi, sham figuralari | `atlas/ta/detect.py` |
+| Dataset: 37 aktiv × 10+ yil, har bir signal = bitta yozuv; triple-barrier belgi (maqsad 1.5·ATR, stop 1·ATR, 20 kun); taqqoslash — o'sha aktivda ±6 oyda har kuni kirish; Holm tuzatishi | `atlas/ta/dataset.py` |
+| SetupNet: 64 barlik 1D-CNN (dilated) + attention pooling + strategiya/guruh embedding + kontekst → P(maqsad stopdan oldin) | `atlas/ta/model.py` |
+| Yozma tahlil | `atlas/ta/analyze.py` |
+
+O'qitish: `python -m atlas.cli ta-train` (CPU'da bir necha daqiqa; haftalik `retrain.yml` ichida ham bor).
+Baholash: oxirgi 365 kun model ko'rmagan holdout, oldidan 30 kunlik embargo. "Ishonchli signal" chegarasi
+validatsiyada tanlanadi. Natijalar saytdagi **Strategiyalar** sahifasida chiqadi. Asosiy xulosa: mashhur strategiyalarning
+ko'pi o'z-o'zidan tasodifiy kirishdan yaxshi emas; foyda modelning signallarni saralashidan keladi.
+
 ## Haqiqiy bozorga o'tish — bitta buyruq
 
 ```powershell

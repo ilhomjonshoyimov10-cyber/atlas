@@ -201,6 +201,23 @@ def track():
     return track_record(_svc().prices)
 
 
+@app.get("/api/ta/{symbol}")
+def ta(symbol: str):
+    """Texnik tahlil: SNR, SND, tuzilma, klassik figuralar, faol signallar va SetupNet bahosi."""
+    from ..ta.service import analysis
+    s = _svc()
+    if symbol not in s.prices:
+        raise HTTPException(404, "Aktiv topilmadi")
+    fc = s.forecast([symbol]).get(symbol)
+    return analysis(symbol, s.prices, fc)
+
+
+@app.get("/api/strategies")
+def strategies():
+    from ..ta.service import strategies as st
+    return st()
+
+
 @app.get("/api/experiments")
 def experiments():
     from ..config import REPORTS_DIR

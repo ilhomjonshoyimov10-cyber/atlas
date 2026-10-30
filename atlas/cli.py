@@ -69,6 +69,8 @@ def main(argv=None):
     dm = sub.add_parser("demo"); dm.add_argument("--quick", action="store_true")
     bt = sub.add_parser("backtest"); bt.add_argument("--threshold", type=float, default=0.05)
     bt.add_argument("--cost-bps", type=float, default=5.0)
+    sub.add_parser("ta-train", help="texnik tahlil dataseti + SetupNet o'qitish")
+    ta = sub.add_parser("ta", help="bitta aktiv bo'yicha texnik tahlil"); ta.add_argument("symbol")
     cu = sub.add_parser("cloud-update", help="statik sayt uchun ma'lumotni yangilash (GitHub Actions)")
     cu.add_argument("--skip-prices", action="store_true"); cu.add_argument("--skip-news", action="store_true")
     for p in (e, t, dm, rl):
@@ -108,6 +110,14 @@ def main(argv=None):
         panel, _, _ = _load_cached(cfg)
         r = run_backtest(panel, "HOLDOUT", "full", a.threshold, a.cost_bps)
         print(json.dumps({"period": r["period"], "stats": r["stats"]}, indent=1))
+    elif a.cmd == "ta-train":
+        from .ta.pipeline import train as ta_train
+        r = ta_train()
+        print(json.dumps({k: r[k] for k in ("auc", "auc_baseline", "brier_skill", "filter")}, indent=1))
+    elif a.cmd == "ta":
+        from .data.prices import load_prices
+        from .ta.service import analysis
+        print("\n".join(analysis(a.symbol.upper(), load_prices())["text"]))
     elif a.cmd == "cloud-update":
         from .cloud import cloud_update
         print(json.dumps(cloud_update(a.skip_prices, a.skip_news), indent=1, default=str))

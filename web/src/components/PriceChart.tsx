@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState } from "react";
-import { Bar, Forecast, fmtPct, fmtPrice } from "../api";
+import { Bar, Forecast, fmtPct, fmtPrice, TA } from "../api";
 
 const W = 1000, H = 380, PAD_L = 8, PAD_R = 64, PAD_T = 16, PAD_B = 28;
 const FUTURE_FRAC = 0.2; // grafikning o'ng 20% — prognoz zonasi
 
-interface Props { bars: Bar[]; forecast: Forecast | null; years: number }
+interface Props { bars: Bar[]; forecast: Forecast | null; years: number; ta?: TA | null }
 
-export default function PriceChart({ bars, forecast, years }: Props) {
+export default function PriceChart({ bars, forecast, years, ta }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
 
@@ -32,7 +32,8 @@ export default function PriceChart({ bars, forecast, years }: Props) {
     lo -= padY; hi += padY;
     const x = (i: number) => PAD_L + (i / (data.length - 1)) * histW;
     const xf = (h: number) => PAD_L + histW + (h / maxH) * (plotW - histW);
-    const y = (v: number) => PAD_T + (1 - (v - lo) / (hi - lo)) * (H - PAD_T - PAD_B);
+    const y = Object.assign((v: number) => PAD_T + (1 - (v - lo) / (hi - lo)) * (H - PAD_T - PAD_B),
+      { invert: (py: number) => lo + (1 - (py - PAD_T) / (H - PAD_T - PAD_B)) * (hi - lo) });
     const line = data.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(d.close).toFixed(1)}`).join("");
     const area = `${line}L${x(data.length - 1)},${H - PAD_B}L${x(0)},${H - PAD_B}Z`;
     const last = data[data.length - 1].close;
@@ -84,6 +85,29 @@ export default function PriceChart({ bars, forecast, years }: Props) {
             {data[i].t.slice(0, years > 2 ? 4 : 7)}
           </text>
         ))}
+        {ta && (() => {
+          const [ylo, yhi] = [geo.y.invert(H - PAD_B), geo.y.invert(PAD_T)];
+          const x1 = PAD_L + geo.histW;
+          return (
+            <g className="ta-overlay">
+              {ta.zones.map((z, i) => {
+                const from = Math.max(0, data.findIndex((d) => d.t >= z.from));
+                const top = Math.min(z.hi, yhi), bot = Math.max(z.lo, ylo);
+                if (top <= bot) return null;
+                return <rect key={i} x={geo.x(from)} width={x1 - geo.x(from)} y={geo.y(top)} height={Math.max(2, geo.y(bot) - geo.y(top))}
+                  className={`ta-zone ${z.kind}`}><title>{z.kind === "demand" ? "Demand" : "Supply"} zonasi {fmtPrice(z.lo)}–{fmtPrice(z.hi)}</title></rect>;
+              })}
+              {ta.levels.filter((l) => l.price > ylo && l.price < yhi).map((l, i) => (
+                <g key={i}>
+                  <line x1={PAD_L} x2={x1} y1={geo.y(l.price)} y2={geo.y(l.price)} className={`ta-level ${l.type}`} />
+                  <text x={x1 - 4} y={geo.y(l.price) - 4} textAnchor="end" className={`ta-label ${l.type}`}>
+                    {l.type === "support" ? "S" : "R"} {fmtPrice(l.price)} ×{l.touches}
+                  </text>
+                </g>
+              ))}
+            </g>
+          );
+        })()}
         <path d={geo.area} fill="url(#histFill)" />
         <path d={geo.line} className="price-line" />
         {forecast && (
