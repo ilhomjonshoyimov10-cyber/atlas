@@ -52,6 +52,7 @@ def test_calendar_features_shape():
 def test_quantiles_never_cross():
     import torch
     from atlas.config import ModelConfig
+    from atlas.model.net import AtlasNet
     cfg = ModelConfig(hidden=16, news_days=3, lookback=10, heads=2)
     m = AtlasNet(cfg, n_assets=3, price_dim=8, season_dim=24, news_dim=20)
     mm = torch.ones(5, 3).bool()
@@ -294,7 +295,6 @@ def test_intraday_context_no_lookahead():
     a = context_frame({"1h": h1}, "1h", h1).iloc[:590]
     b = context_frame({"1h": fut}, "1h", fut).iloc[:590]
     assert np.allclose(a.to_numpy(), b.to_numpy())
-
 
 def test_presets_and_block_mask():
     import torch
