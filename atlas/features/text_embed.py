@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 class FinBERTEmbedder:
     name = "finbert"
 
-    def __init__(self, model_name: str = "ProsusAI/finbert", device: str | None = None, batch_size: int = 64):
+    def __init__(self, model_name: str = "ProsusAI/finbert", device: str | None = None, batch_size: int | None = None):
         import torch
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -31,7 +31,9 @@ class FinBERTEmbedder:
             p.requires_grad_(False)
         labels = {v.lower(): k for k, v in self.model.config.id2label.items()}
         self.pos_i, self.neg_i = labels["positive"], labels["negative"]
-        self.batch_size = batch_size
+        import os
+        # GPU'da katta batch + fp16 (T4 da ~10x tezroq); CPU'da kichik batch
+        self.batch_size = batch_size or int(os.environ.get("ATLAS_FINBERT_BS", 256 if self.device == "cuda" else 64))
         self.dim = self.model.config.hidden_size
 
     def encode(self, texts: list[str]) -> tuple[np.ndarray, np.ndarray]:
@@ -41,14 +43,15 @@ class FinBERTEmbedder:
             for i in range(0, len(texts), self.batch_size):
                 batch = texts[i:i + self.batch_size]
                 enc = self.tok(batch, padding=True, truncation=True, max_length=64, return_tensors="pt").to(self.device)
-                out = self.model(**enc)
+                with torch.autocast("cuda", dtype=torch.float16, enabled=self.device == "cuda"):
+                    out = self.model(**enc)
                 h = out.hidden_states[-1]
                 m = enc["attention_mask"].unsqueeze(-1).float()
                 pooled = (h * m).sum(1) / m.sum(1).clamp(min=1)
                 p = out.logits.softmax(-1)
                 embs.append(pooled.float().cpu().numpy())
                 tones.append((p[:, self.pos_i] - p[:, self.neg_i]).float().cpu().numpy())
-                if (i // self.batch_size) % 50 == 0:
+                if (i // self.batch_size) % 200 == 0:
                     log.info("FinBERT: %d/%d", i + len(batch), len(texts))
         return np.concatenate(embs).astype("float32"), np.concatenate(tones).astype("float32")
 

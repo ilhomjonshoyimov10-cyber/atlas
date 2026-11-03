@@ -77,12 +77,28 @@ def main(argv=None):
     ta = sub.add_parser("ta", help="bitta aktiv bo'yicha texnik tahlil"); ta.add_argument("symbol")
     cu = sub.add_parser("cloud-update", help="statik sayt uchun ma'lumotni yangilash (GitHub Actions)")
     cu.add_argument("--skip-prices", action="store_true"); cu.add_argument("--skip-news", action="store_true")
-    for p in (e, t, dm, rl):
+    pt = sub.add_parser("pretrain", help="self-supervised: narx Transformerini oldindan o'qitish")
+    pt.add_argument("--pt-epochs", type=int, default=20); pt.add_argument("--mask-ratio", type=float, default=0.3)
+    tu = sub.add_parser("tune", help="Optuna giperparametr qidiruvi (holdout va oxirgi foldga tegmaydi)")
+    tu.add_argument("--trials", type=int, default=30); tu.add_argument("--timeout", type=int, default=None)
+    for p in (e, t, dm, rl, pt, tu):
         p.add_argument("--epochs", type=int, default=None)
         p.add_argument("--device", default="auto")
+        p.add_argument("--preset", default=None, help="cpu | default | gpu | gpu_xl")
+        p.add_argument("--tuned", action="store_true", help="data/models/best_config.json dagi sozlamalarni qo'llash")
+        p.add_argument("--pretrained", default=None, help="oldindan o'qitilgan kodlovchi (pretrain natijasi)")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     cfg = ModelConfig()
+    if getattr(a, "preset", None):
+        from .presets import apply_preset
+        cfg = apply_preset(cfg, a.preset)
+    if getattr(a, "tuned", False):
+        from dataclasses import replace as _rep
+        from .config import MODELS_DIR
+        cfg = _rep(cfg, **json.loads((MODELS_DIR / "best_config.json").read_text(encoding="utf-8")))
+    if getattr(a, "pretrained", None):
+        cfg.extra = {**cfg.extra, "pretrained": a.pretrained}
     if getattr(a, "epochs", None):
         cfg.epochs = a.epochs
 
@@ -114,6 +130,14 @@ def main(argv=None):
         panel, _, _ = _load_cached(cfg)
         r = run_backtest(panel, "HOLDOUT", "full", a.threshold, a.cost_bps)
         print(json.dumps({"period": r["period"], "stats": r["stats"]}, indent=1))
+    elif a.cmd == "pretrain":
+        _pretrain(a, cfg)
+    elif a.cmd == "tune":
+        from .model.tune import tune
+        panel, cube, _ = _load_cached(cfg)
+        r = tune(panel, cube, cfg, _device(a.device), a.trials, a.timeout)
+        print(json.dumps({k: r[k] for k in ("best_params", "best_search_loss", "check_fold_loss_best",
+                                            "check_fold_loss_base", "check_verdict")}, indent=1, default=float))
     elif a.cmd == "live":
         _live(a)
     elif a.cmd == "intraday-train":
@@ -188,7 +212,7 @@ def _real(a, cfg: ModelConfig):
     from .model.evaluate import walk_forward
     from .pipeline import build_features, load_inputs, train_final
 
-    if not a.full:   # CPU uchun tez sozlamalar
+    if not a.full and not getattr(a, "preset", None):   # CPU uchun tez sozlamalar (preset berilmagan bo'lsa)
         cfg.epochs, cfg.wf_folds, cfg.hidden = min(cfg.epochs, 6), 1, 48
         cfg.lookback, cfg.batch_size, cfg.patience = 30, 1024, 2
         cfg.layers, cfg.ensemble = 1, 2
@@ -214,6 +238,27 @@ def _real(a, cfg: ModelConfig):
     log.info("5/5 Servis modeli o'qitilmoqda...")
     train_final(panel, cube, cfg, _device(a.device), emb)
     log.info("TAYYOR. Endi: python -m atlas.cli serve  ->  http://localhost:8000")
+
+
+def _pretrain(a, cfg):
+    """Eng birinchi walk-forward test davridan OLDINGI qatorlarda masked-reconstruction oldindan o'qitish."""
+    import pandas as pd
+    import torch
+    from .config import MODELS_DIR, REPORTS_DIR
+    from .features.dataset import BatchMaker
+    from .model.evaluate import split_dates
+    from .model.pretrain import pretrain
+    panel, _, _ = _load_cached(cfg)
+    folds, fin = split_dates(panel, cfg)
+    first_test = min([pd.Timestamp(f["test_start"]) for f in folds] + [pd.Timestamp(fin["test_start"])])
+    rows = panel.sample_rows(cfg.lookback, need_target=False)
+    rows = rows[pd.DatetimeIndex(panel.date[rows]) < first_test - pd.Timedelta(days=5)]
+    bm = BatchMaker(panel, None, cfg, _device(a.device))
+    state, info = pretrain(cfg, bm, rows, epochs=a.pt_epochs, ratio=a.mask_ratio)
+    info["cutoff"] = str(first_test.date())
+    torch.save(state, MODELS_DIR / "pretrained.pt")
+    (REPORTS_DIR / "pretrain.json").write_text(json.dumps(info, indent=1, default=float), encoding="utf-8")
+    print(json.dumps({k: info[k] for k in ("best_val_mse", "baseline_mean_fill_mse", "rows", "cutoff")}, indent=1))
 
 
 def _live(a):

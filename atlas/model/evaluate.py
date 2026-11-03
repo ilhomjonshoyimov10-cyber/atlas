@@ -30,7 +30,8 @@ from .train import apply_conformal, conformal_offsets, fit_ensemble, metrics, pi
 log = logging.getLogger(__name__)
 # variant: (yangilik, mavsumiylik, bozorlararo)
 VARIANTS = {"price": (False, False, False), "price+season": (False, True, False),
-            "no_news": (False, True, True), "full": (True, True, True)}
+            "no_news": (False, True, True), "full": (True, True, True),
+            "full_scratch": (True, True, True)}   # "full" bilan bir xil, lekin oldindan o'qitishsiz (ablation)
 
 
 def split_dates(panel: Panel, cfg: ModelConfig):
@@ -113,6 +114,8 @@ def run_variant(name, cfg, bm_full, bm_none, split, panel):
         return q, None, None
     use_news, use_season, use_market = VARIANTS[name]
     vcfg = replace(cfg, use_news=use_news, use_season=use_season, use_market=use_market)
+    if name == "full_scratch":
+        vcfg = replace(vcfg, extra={k: v for k, v in cfg.extra.items() if k != "pretrained"})
     bm = bm_full if use_news else bm_none
     model, info = fit_ensemble(vcfg, bm, split["fit"], split["val"], n=cfg.extra.get("wf_ensemble", 1),
                                verbose=False)
@@ -128,6 +131,8 @@ def walk_forward(panel: Panel, cube, cfg: ModelConfig, device="cpu", final: bool
     folds, fin = split_dates(panel, cfg)
     if cube is None:
         variants = tuple(v for v in variants if v != "full")
+    if cfg.extra.get("pretrained") and "full" in variants and "full_scratch" not in variants:
+        variants = tuple(variants) + ("full_scratch",)   # oldindan o'qitish foyda berdimi — shu bilan o'lchanadi
     report = {"config": {k: v for k, v in cfg.__dict__.items() if k != "extra"}, "folds": [], "variants": list(variants)}
     daily: dict[str, list[pd.Series]] = {v: [] for v in variants}
     splits = [(f"fold{f['k']}", f) for f in folds] + ([("HOLDOUT", fin)] if final else [])
@@ -161,7 +166,7 @@ def walk_forward(panel: Panel, cube, cfg: ModelConfig, device="cpu", final: bool
                 summ[v][f"h{h}_dir_acc"] = float(np.mean([m[f"h{h}"]["dir_acc"] for m in ms]))
     report["walk_forward_summary"] = summ
     # Asosiy savol: yangilik foyda beradimi? -> full vs no_news (boshqa hamma narsa bir xil)
-    comps = [("full", "no_news"), ("no_news", "price+season"), ("price+season", "price"),
+    comps = [("full", "full_scratch"), ("full", "no_news"), ("no_news", "price+season"), ("price+season", "price"),
              ("price", "climatology"), ("full", "climatology")]
     raw = {}
     for a, b in comps:

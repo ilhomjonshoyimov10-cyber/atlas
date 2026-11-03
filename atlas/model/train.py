@@ -44,6 +44,11 @@ def fit(cfg: ModelConfig, bm: BatchMaker, train_rows: np.ndarray, val_rows: np.n
     """Bitta model: AdamW + warmup + cosine, gradient clipping, GPU'da aralash aniqlik (AMP), early stopping."""
     set_seed(cfg.seed)
     model = build_model(cfg, bm)
+    pre = cfg.extra.get("pretrained") if cfg.extra else None
+    if pre:   # self-supervised oldindan o'qitilgan narx kodlovchisi (atlas/model/pretrain.py)
+        from .pretrain import load_into
+        state = torch.load(pre, map_location="cpu", weights_only=False) if isinstance(pre, str) else pre
+        load_into(model, state)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     steps_per_ep = max(1, int(np.ceil(len(train_rows) / cfg.batch_size)))
     total, warm = cfg.epochs * steps_per_ep, max(1, cfg.warmup_epochs * steps_per_ep)

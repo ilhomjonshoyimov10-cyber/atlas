@@ -52,7 +52,6 @@ def test_calendar_features_shape():
 def test_quantiles_never_cross():
     import torch
     from atlas.config import ModelConfig
-    from atlas.model.net import AtlasNet
     cfg = ModelConfig(hidden=16, news_days=3, lookback=10, heads=2)
     m = AtlasNet(cfg, n_assets=3, price_dim=8, season_dim=24, news_dim=20)
     mm = torch.ones(5, 3).bool()
@@ -295,3 +294,26 @@ def test_intraday_context_no_lookahead():
     a = context_frame({"1h": h1}, "1h", h1).iloc[:590]
     b = context_frame({"1h": fut}, "1h", fut).iloc[:590]
     assert np.allclose(a.to_numpy(), b.to_numpy())
+
+
+def test_presets_and_block_mask():
+    import torch
+    from atlas.config import ModelConfig
+    from atlas.presets import apply_preset, PRESETS
+    from atlas.model.pretrain import block_mask
+    for name in PRESETS:
+        cfg = apply_preset(ModelConfig(), name)
+        assert cfg.hidden % cfg.heads == 0
+    m = block_mask(8, 60, 0.3, "cpu", torch.Generator().manual_seed(0))
+    assert m.shape == (8, 60) and 0.1 < m.float().mean() < 0.5
+
+
+def test_pretrained_weights_load_into_atlasnet():
+    from atlas.config import ModelConfig
+    from atlas.model.pretrain import MaskedPricePretrainer, load_into
+    cfg = ModelConfig(hidden=32, layers=1, heads=4, lookback=20)
+    pre = MaskedPricePretrainer(cfg, 5)
+    state = {"price": pre.price.state_dict(), "asset_emb": pre.asset_emb.state_dict()}
+    from atlas.model.train import build_model
+    net = build_model(cfg, n_assets=5, news_dim=8)
+    assert load_into(net, state)

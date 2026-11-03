@@ -62,30 +62,61 @@ def load_kaggle_djia(path: Path | None = None) -> pd.DataFrame:
     return out[COLUMNS].drop_duplicates("id")
 
 
-def load_fnspid(path: Path | None = None, min_year: int = 2012, chunksize: int = 500_000) -> pd.DataFrame:
+def load_fnspid(path: Path | None = None, min_year: int = 2012, chunksize: int = 500_000,
+                max_per_day: int | None = None, keep_symbols: set[str] | None = None) -> pd.DataFrame:
+    """FNSPID (Nasdaq yangiliklari, 1999–2023, ~15 mln sarlavha).
+
+    Hammasini FinBERT'dan o'tkazish shart emas: loyihadagi aktivlarga tegishli sarlavhalar to'liq olinadi,
+    qolganlaridan har kuni `max_per_day` ta tasodifiy (lekin takrorlanuvchan) namuna olinadi.
+    Vaqti 00:00:00 bo'lgan yozuvlar faqat sana deb hisoblanadi -> ertasi kundan ishlatiladi (leakage'dan himoya).
+    """
+    import os
     path = path or RAW / "nasdaq_exteral_data.csv"
     if not path.exists():
         return pd.DataFrame(columns=COLUMNS)
+    max_per_day = max_per_day if max_per_day is not None else int(os.environ.get("ATLAS_FNSPID_PER_DAY", "80"))
+    if keep_symbols is None:
+        from ..config import ASSETS
+        keep_symbols = {a.yf for a in ASSETS if a.group == "equity"}
     parts = []
     for ch in pd.read_csv(path, usecols=["Date", "Article_title", "Stock_symbol", "Url"],
                           chunksize=chunksize, on_bad_lines="skip"):
         ch = ch.dropna(subset=["Date", "Article_title"])
-        ts = pd.to_datetime(ch["Date"].str.replace(" UTC", "", regex=False), errors="coerce", utc=True)
+        ts = pd.to_datetime(ch["Date"].astype(str).str.replace(" UTC", "", regex=False), errors="coerce", utc=True)
         ch = ch.assign(ts=ts).dropna(subset=["ts"])
         ch = ch[ch.ts.dt.year >= min_year]
+        sym = ch["Stock_symbol"].fillna("").astype(str).str.upper()
+        mine = sym.isin(keep_symbols)
+        # boshqa sarlavhalardan kunlik namuna (sarlavha xeshi bo'yicha — har safar bir xil natija)
+        rest = ch[~mine]
+        if max_per_day and len(rest):
+            key = rest["Article_title"].astype(str).map(lambda t: int(hashlib.md5(t.encode()).hexdigest()[:8], 16))
+            rest = rest.assign(k=key).sort_values("k").groupby(rest.ts.dt.date, group_keys=False).head(max_per_day)
+        ch = pd.concat([ch[mine], rest.drop(columns="k", errors="ignore")])
+        date_only = (ch.ts.dt.hour == 0) & (ch.ts.dt.minute == 0) & (ch.ts.dt.second == 0)
+        avail = ch["ts"] + PUBLISH_LAG
+        avail = avail.where(~date_only, ch["ts"].dt.normalize() + pd.Timedelta(days=1))
         parts.append(pd.DataFrame({
             "origin": "fnspid",
             "source": "nasdaq",
             "title": ch["Article_title"].astype(str).str.strip(),
             "url": ch["Url"].fillna(""),
             "published_at": ch["ts"],
-            "available_at": ch["ts"] + PUBLISH_LAG,
-            "assets": ch["Stock_symbol"].fillna("").astype(str).str.upper(),
+            "available_at": avail,
+            "assets": ch["Stock_symbol"].fillna("").astype(str).str.upper().where(
+                ch["Stock_symbol"].fillna("").astype(str).str.upper().isin(keep_symbols), ""),
         }))
     if not parts:
         return pd.DataFrame(columns=COLUMNS)
     out = pd.concat(parts, ignore_index=True)
+    # kun bo'yicha namuna chunklar orasida qayta cheklanadi
+    if max_per_day:
+        own = out["assets"] != ""
+        rest = out[~own]
+        rest = rest.groupby(rest.published_at.dt.date, group_keys=False).head(max_per_day)
+        out = pd.concat([out[own], rest], ignore_index=True)
     out["id"] = [_hid("f", t, d) for t, d in zip(out.title, out.published_at)]
+    log.info("FNSPID: %d sarlavha (%s .. %s)", len(out), out.published_at.min(), out.published_at.max())
     return out[COLUMNS].drop_duplicates("id")
 
 
