@@ -187,13 +187,26 @@ def _gdelt(days: int):
     from .data.news_open import fetch_gdelt_doc
     end = pd.Timestamp.utcnow().tz_localize(None)
     frames = []
+    fails = 0
     for k in range(days):
         day_end = end - pd.Timedelta(days=k)
-        try:
-            frames.append(fetch_gdelt_doc(start=day_end - pd.Timedelta(days=1), end=day_end))
-        except Exception as ex:
-            log.warning("GDELT %s: %s", day_end.date(), ex)
-        time.sleep(5)
+        for attempt in range(3):
+            try:
+                frames.append(fetch_gdelt_doc(start=day_end - pd.Timedelta(days=1), end=day_end))
+                fails = 0
+                break
+            except Exception as ex:
+                busy = "429" in str(ex)
+                log.warning("GDELT %s: %s", day_end.date(), "429 — server band, kutilmoqda" if busy else ex)
+                if not busy:
+                    break
+                time.sleep(15 * (attempt + 1))      # 429: sekinlashtirib qayta urinish
+        else:
+            fails += 1
+        if fails >= 5:
+            log.warning("GDELT ketma-ket 5 kun javob bermadi — to'xtatildi (boshqa yangilik manbalari bilan davom etiladi)")
+            break
+        time.sleep(6)
     frames = [f for f in frames if len(f)]
     if not frames:
         log.warning("GDELT: hech narsa olinmadi")
