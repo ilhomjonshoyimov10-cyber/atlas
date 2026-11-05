@@ -317,3 +317,51 @@ def test_pretrained_weights_load_into_atlasnet():
     from atlas.model.train import build_model
     net = build_model(cfg, n_assets=5, news_dim=8)
     assert load_into(net, state)
+
+
+def _toy_market(T=400, A=6, seed=0):
+    import numpy as np
+    import pandas as pd
+    from atlas.backtest.engine import Market
+    rng = np.random.default_rng(seed)
+    ret = rng.normal(0, 0.01, (T, A))
+    ret_next = np.vstack([ret[1:], np.full((1, A), np.nan)])
+    q = np.stack([np.full((T, A), -1.6), np.zeros((T, A)), np.full((T, A), 1.6)], -1)
+    return Market("wf", pd.bdate_range("2022-01-03", periods=T), [f"A{i}" for i in range(A)], ["forex"] * A,
+                  ret, ret_next, np.full((T, A), 0.01), {"m": q}, [["fold0", "2022-01-03", "2023-07-01"]])
+
+
+def test_backtest_foresight_vs_random_and_costs():
+    import numpy as np
+    from atlas.backtest.engine import simulate
+    from atlas.backtest import metrics as M
+    mkt = _toy_market()
+    perfect = np.sign(mkt.ret)                       # kelajakni biladigan signal -> juda yuqori Sharpe
+    rnd = np.random.default_rng(1).choice([-1.0, 1.0], mkt.ret.shape)
+    sp = M.summary(simulate(mkt, perfect, 0.0)["r"])["sharpe"]
+    sr = M.summary(simulate(mkt, rnd, 0.0)["r"])["sharpe"]
+    assert sp > 5 and abs(sr) < 2.5
+    # xarajat natijani faqat yomonlashtiradi
+    assert simulate(mkt, rnd, 20.0)["r"].sum() < simulate(mkt, rnd, 0.0)["r"].sum()
+    # 1 kun kechiksa "kelajakni bilish" ustunligi yo'qoladi (ijro siljishi to'g'ri ishlaydi)
+    assert abs(M.summary(simulate(mkt, perfect, 0.0, lag=1)["r"])["sharpe"]) < 2.5
+
+
+def test_backtest_vol_target_uses_only_past():
+    import numpy as np
+    from atlas.backtest.engine import simulate
+    mkt = _toy_market()
+    s = np.ones(mkt.ret.shape)
+    a = simulate(mkt, s, 0.0)["w"]
+    mkt.ret[300:] *= 10                                   # kelajakdagi volatillik portlashi
+    b = simulate(mkt, s, 0.0)["w"]
+    assert np.allclose(a[:301], b[:301])                  # 300-kungacha vaznlar o'zgarmasligi kerak
+
+
+def test_backtest_report_json_clean():
+    import json
+    from atlas.backtest import build_report, clean, robustness
+    mkt = _toy_market(T=200)
+    rep = clean(build_report(mkt, "direction", 0.0, "real", robustness(mkt), perm_n=20))
+    json.dumps(rep, allow_nan=False)
+    assert "m" in rep["variants"] and "buy_hold" in rep["variants"]

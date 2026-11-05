@@ -9,7 +9,7 @@
   python -m atlas.cli evaluate --final         # + final holdout (oxirida, BIR MARTA)
   python -m atlas.cli train                    # servis modeli
   python -m atlas.cli serve                    # API + web
-  python -m atlas.cli backtest                 # holdout'da model signallari bo'yicha savdo natijasi
+  python -m atlas.cli backtest --segment wf    # walk-forward OOS'da professional backtest (Sharpe, DSR, ...)
   python -m atlas.cli demo                     # hammasi sintetik ma'lumotda (internet kerak emas)
 """
 from __future__ import annotations
@@ -67,7 +67,12 @@ def main(argv=None):
     t = sub.add_parser("train")
     s = sub.add_parser("serve"); s.add_argument("--host", default="0.0.0.0"); s.add_argument("--port", type=int, default=8000)
     dm = sub.add_parser("demo"); dm.add_argument("--quick", action="store_true")
-    bt = sub.add_parser("backtest"); bt.add_argument("--threshold", type=float, default=0.05)
+    bt = sub.add_parser("backtest", help="professional backtest (out-of-sample, xarajat, statistik testlar)")
+    bt.add_argument("--threshold", type=float, default=0.01)
+    bt.add_argument("--segment", choices=["wf", "holdout"], default="wf")
+    bt.add_argument("--strategy", choices=["direction", "long_only", "cross_sectional"], default="direction")
+    bt.add_argument("--cost", default="real", help="'real' (aktiv sinfi bo'yicha) yoki bps raqam")
+    bt.add_argument("--export", action="store_true", help="saytdagi barcha backtest fayllarini qayta hisoblash")
     bt.add_argument("--cost-bps", type=float, default=5.0)
     lv = sub.add_parser("live", help="jonli signallar: yangilik shoki + oltin 5m–4h (push)")
     lv.add_argument("--once", action="store_true", help="bir marta ishlab chiqish (bulut/cron uchun)")
@@ -126,10 +131,23 @@ def main(argv=None):
         panel, cube, emb = _load_cached(cfg)
         train_final(panel, cube, cfg, _device(a.device), emb)
     elif a.cmd == "backtest":
-        from .model.backtest import run_backtest
         panel, _, _ = _load_cached(cfg)
-        r = run_backtest(panel, "HOLDOUT", "full", a.threshold, a.cost_bps)
-        print(json.dumps({"period": r["period"], "stats": r["stats"]}, indent=1))
+        if a.export:
+            from types import SimpleNamespace
+            from .cloud import export_backtests
+            print("fayllar:", export_backtests(SimpleNamespace(panel=panel), force=True))
+        else:
+            from .backtest import build_report, clean, load_market, robustness
+            mkt = load_market(panel, a.segment)
+            rob = robustness(mkt)
+            cost = a.cost if a.cost == "real" else float(a.cost)
+            r = clean(build_report(mkt, a.strategy, a.threshold, cost, rob, perm_n=200))
+            print(f"{r['strategy_name']} | {r['period'][0]} — {r['period'][1]} | xarajat: {a.cost} | "
+                  f"sinovlar: {rob['n_trials']}, deflated SR0 = {rob['sr0_deflated']:.2f}")
+            for v, d in r["variants"].items():
+                s_, t_ = d["stats"], d["tests"]
+                print(f"  {v:13s} Sharpe {s_['sharpe']:6.2f}  CAGR {s_['cagr']:7.2f}%  MaxDD {s_['max_dd']:7.2f}%  "
+                      f"CI90 {t_['sharpe_ci90']}  PSR {t_['psr']}  DSR {t_.get('dsr')}")
     elif a.cmd == "pretrain":
         _pretrain(a, cfg)
     elif a.cmd == "tune":

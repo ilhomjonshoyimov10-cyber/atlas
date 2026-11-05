@@ -146,9 +146,10 @@ export const api = {
   },
   report: () => STATIC ? once<any>("report.json", 3600000) : get<any>("/api/report"),
   track: () => STATIC ? once<Track>("track.json") : get<Track>("/api/track"),
-  backtest: (thr: number, cost: number) => STATIC
-    ? once<any>(`backtest/t${thr.toFixed(2)}_c${cost}.json`, 3600000)
-    : get<any>(`/api/backtest?threshold=${thr}&cost_bps=${cost}`),
+  backtestIndex: () => STATIC ? once<any>("backtest/index.json", 3600000) : get<any>("/api/backtest/index"),
+  backtest: (seg: string, strategy: string, thr: number | null, cost: string | number) => STATIC
+    ? once<any>(`backtest/${seg}/${strategy}_t${thr === null ? "x" : thr.toFixed(3)}_c${cost}.json`, 3600000)
+    : get<any>(`/api/backtest?segment=${seg}&strategy=${strategy}&threshold=${thr ?? 0}&cost=${cost}`),
   signals: () => STATIC ? once<Signals>("signals.json", 60000) : get<Signals>("/api/signals"),
   ta: (s: string) => STATIC ? once<TA>(`ta/${s}.json`) : get<TA>(`/api/ta/${s}`),
   strategies: () => STATIC ? once<Strategies>("strategies.json") : get<Strategies>("/api/strategies"),

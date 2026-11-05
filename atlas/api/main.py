@@ -196,19 +196,45 @@ def report():
 
 
 @app.get("/api/backtest")
-def backtest(variant: str = "full", threshold: float = Query(0.05, ge=0, le=0.4),
-             cost_bps: float = Query(5.0, ge=0, le=100)):
-    from ..model.backtest import run_backtest
+def backtest(segment: str = Query("wf", pattern="^(wf|holdout)$"), strategy: str = "direction",
+             threshold: float = Query(0.01, ge=0, le=0.4), cost: str = "real"):
+    from ..backtest import STRATEGIES, build_report, clean, load_market, robustness
+    if strategy not in STRATEGIES:
+        raise HTTPException(400, "strategiya noma'lum")
     s = _svc()
-    key = (variant, round(threshold, 3), round(cost_bps, 2))
     cache = getattr(s, "_bt_cache", {})
-    if key not in cache:
+    mk = cache.get(("mkt", segment))
+    if mk is None:
         try:
-            cache[key] = run_backtest(s.panel, "HOLDOUT", variant, threshold, cost_bps)
+            m = load_market(s.panel, segment)
         except FileNotFoundError as e:
             raise HTTPException(404, str(e))
-        s._bt_cache = cache
+        mk = cache[("mkt", segment)] = (m, robustness(m))
+    key = (segment, strategy, round(threshold, 4), cost)
+    if key not in cache:
+        c = cost if cost == "real" else float(cost)
+        cache[key] = clean(build_report(mk[0], strategy, threshold, c, mk[1], perm_n=100))
+    s._bt_cache = cache
     return cache[key]
+
+
+@app.get("/api/backtest/index")
+def backtest_index():
+    from ..backtest import COSTS, STRATEGIES, THRESHOLDS, clean, load_market, robustness
+    s = _svc()
+    out = {"version": 2, "strategies": STRATEGIES, "thresholds": THRESHOLDS, "costs": COSTS, "segments": {}}
+    cache = getattr(s, "_bt_cache", {})
+    for seg in ("wf", "holdout"):
+        try:
+            mk = cache.get(("mkt", seg)) or (lambda m: (m, robustness(m)))(load_market(s.panel, seg))
+        except FileNotFoundError:
+            continue
+        cache[("mkt", seg)] = mk
+        m, rob = mk
+        out["segments"][seg] = clean({"period": [str(m.dates[0].date()), str(m.dates[-1].date())],
+                                      "folds": m.folds, "variants": list(m.q), **rob})
+    s._bt_cache = cache
+    return out
 
 
 @app.get("/api/track")

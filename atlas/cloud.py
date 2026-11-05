@@ -27,8 +27,6 @@ from .config import ASSETS, DATA_DIR, PRICES_DIR, REPORTS_DIR
 log = logging.getLogger(__name__)
 SITE = DATA_DIR / "site"
 LOG_PATH = DATA_DIR / "forecast_log.jsonl"
-BT_THRESHOLDS = [round(0.02 * i, 2) for i in range(11)]      # 0 .. 0.20
-BT_COSTS = [0, 2, 5, 10, 20]
 CLOSE_HOUR_UTC = 21   # shu soatdan keyin bugungi kunlik sham "yopilgan" deb hisoblanadi
 
 
@@ -156,25 +154,40 @@ def _hash(p: Path) -> str:
 
 
 def export_backtests(svc, force: bool = False) -> int:
-    from .model.backtest import run_backtest
+    """Professional backtest: walk-forward (wf) va holdout segmentlari, barcha strategiya x chegara x xarajat."""
+    from .backtest import COSTS, THRESHOLDS, STRATEGIES, build_report, clean, load_market, robustness
 
-    oos = REPORTS_DIR / "oos_HOLDOUT.npz"
-    stamp = SITE / "backtest" / "_source.txt"
-    h = _hash(oos)
+    srcs = sorted(REPORTS_DIR.glob("oos_*.npz"))
+    h = hashlib.sha1("".join(_hash(f) or "" for f in srcs).encode()).hexdigest() if srcs else ""
+    bdir = SITE / "backtest"
+    stamp = bdir / "_source.txt"
     if not h:
         return 0
-    if not force and stamp.exists() and stamp.read_text(encoding="utf-8", errors="replace") == h:
+    if not force and stamp.exists() and stamp.read_text(encoding="utf-8", errors="replace") == h + ":v2":
         return 0   # bashoratlar o'zgarmagan -> qayta hisoblash shart emas
+    if bdir.exists():
+        shutil.rmtree(bdir)
+    index = {"version": 2, "strategies": STRATEGIES, "thresholds": THRESHOLDS, "costs": COSTS, "segments": {}}
     n = 0
-    for t in BT_THRESHOLDS:
-        for c in BT_COSTS:
-            try:
-                _write(f"backtest/t{t:.2f}_c{c}.json", run_backtest(svc.panel, "HOLDOUT", "full", t, c))
-                n += 1
-            except FileNotFoundError as e:
-                log.warning("Backtest: %s", e)
-                return 0
-    stamp.write_text(h, encoding="utf-8")
+    for seg in ("wf", "holdout"):
+        try:
+            mkt = load_market(svc.panel, seg)
+        except FileNotFoundError as e:
+            log.warning("Backtest %s: %s", seg, e)
+            continue
+        rob = robustness(mkt)
+        perm: dict = {}
+        index["segments"][seg] = clean({"period": [str(mkt.dates[0].date()), str(mkt.dates[-1].date())],
+                                        "folds": mkt.folds, "variants": list(mkt.q), **rob})
+        for st in STRATEGIES:
+            for t in (THRESHOLDS if st != "cross_sectional" else [None]):
+                for c in COSTS:
+                    rep = build_report(mkt, st, t or 0.0, c, rob, perm_n=200, perm_cache=perm)
+                    tt = "x" if t is None else f"{t:.3f}"
+                    _write(f"backtest/{seg}/{st}_t{tt}_c{c}.json", clean(rep))
+                    n += 1
+    _write("backtest/index.json", index)
+    stamp.write_text(h + ":v2", encoding="utf-8")
     return n
 
 
@@ -271,7 +284,6 @@ def export_site(svc, collector_stats: dict | None = None, price_stats: dict | No
     _write("report.json", rep)
     _write("experiments.json", api.experiments())
     _write("track.json", track_record(svc.prices))
-    _write("backtest/index.json", {"thresholds": BT_THRESHOLDS, "costs": BT_COSTS})
     _write("health.json", {
         "ready": True, "error": None, "news_model": svc.cube is not None, "demo": False, "version": "atlas-3",
         "mode": "static", "updated_at": _now().isoformat(),
