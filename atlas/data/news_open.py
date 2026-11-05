@@ -199,6 +199,56 @@ def load_gdelt_hist(paths=None) -> pd.DataFrame:
     return out[COLUMNS].drop_duplicates("id")
 
 
+def backfill_gdelt_hist(start: str = "2024-01-01", end: str | None = None, step_days: int = 4,
+                       budget_min: float = 75, pause: float = 7.0) -> dict:
+    """GDELT DOC API arxividan tarixiy sarlavhalarni yig'ish (kalitsiz, bepul). Davom ettiriladi: tugagan oynalar
+    data/news/raw/gdelt_hist.progress da belgilanadi, qayta ishga tushirilganda o'tkazib yuboriladi.
+    API cheklovi: 5 soniyada 1 so'rov; 429 da kutib qayta uriniladi. budget_min — vaqt chegarasi (daqiqa)."""
+    import json as _json
+    import time as _time
+
+    import httpx
+
+    end = end or (pd.Timestamp.utcnow().normalize() - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    out, prog = RAW / "gdelt_hist.jsonl", RAW / "gdelt_hist.progress"
+    done = set(prog.read_text().split()) if prog.exists() else set()
+    q = '(economy OR inflation OR oil OR gold OR bitcoin OR stocks OR forex OR "interest rates") sourcelang:english'
+    days = pd.date_range(start, end, freq=f"{step_days}D")
+    t0, n_new, fails = _time.time(), 0, 0
+    with open(out, "a", encoding="utf-8") as f, open(prog, "a") as pf:
+        for d in days:
+            key = d.strftime("%Y%m%d")
+            if key in done:
+                continue
+            if (_time.time() - t0) / 60 > budget_min:
+                break
+            d2 = min(d + pd.Timedelta(days=step_days - 1), pd.Timestamp(end))
+            params = {"query": q, "mode": "artlist", "format": "json", "maxrecords": 250, "sort": "hybridrel",
+                      "startdatetime": d.strftime("%Y%m%d000000"), "enddatetime": d2.strftime("%Y%m%d235959")}
+            for att in range(5):
+                try:
+                    r = httpx.get("https://api.gdeltproject.org/api/v2/doc/doc", params=params, timeout=40,
+                                  headers={"User-Agent": "atlas-research"})
+                    if r.status_code == 429 or not r.text.lstrip().startswith("{"):
+                        raise RuntimeError("429")
+                    arts = r.json().get("articles", [])
+                    for a in arts:
+                        f.write(_json.dumps({"t": a.get("title", ""), "s": a.get("seendate"), "d": a.get("domain", ""),
+                                             "u": a.get("url", "")}, ensure_ascii=False) + "\n")
+                    f.flush(); pf.write(key + "\n"); pf.flush()
+                    n_new += len(arts); fails = 0
+                    break
+                except Exception:
+                    _time.sleep(10 * (att + 1))
+            else:
+                fails += 1
+            _time.sleep(pause)
+    left = sum(1 for d in days if d.strftime("%Y%m%d") not in (set(prog.read_text().split()) if prog.exists() else set()))
+    res = {"new": n_new, "windows_left": left, "windows_total": len(days), "minutes": round((_time.time() - t0) / 60, 1)}
+    log.info("GDELT arxiv: %s", res)
+    return res
+
+
 def load_all_news() -> pd.DataFrame:
     """Barcha manbalarni birlashtiradi. Natija available_at bo'yicha tartiblangan."""
     frames = [load_kaggle_djia(), load_fnspid(), load_gdelt_bq(), load_gdelt_hist(), load_collected()]

@@ -398,3 +398,27 @@ def test_gdelt_hist_loader(tmp_path):
                                        "d": "reuters.com", "u": f"https://x/{i}"}) for i in range(3)), encoding="utf-8")
     df = load_gdelt_hist([f])
     assert len(df) == 3 and str(df.available_at.min()) == "2024-06-03 14:20:00+00:00"
+
+
+def test_gdelt_backfill_resumes(tmp_path, monkeypatch):
+    import httpx
+    import atlas.data.news_open as no
+    monkeypatch.setattr(no, "RAW", tmp_path)
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    calls = []
+
+    class R:
+        status_code = 200
+        def __init__(self, d): self.text = '{"articles": [{"title": "Gold rallies %s", "seendate": "%sT120000Z", "domain": "x.com", "url": "https://x/%s"}]}' % (d, d, d)
+        def json(self):
+            import json; return json.loads(self.text)
+
+    def get(url, params, **kw):
+        calls.append(params["startdatetime"][:8]); return R(params["startdatetime"][:8])
+    monkeypatch.setattr(httpx, "get", get)
+    r1 = no.backfill_gdelt_hist("2024-01-01", "2024-01-12", step_days=4)
+    assert r1["new"] == 3 and r1["windows_left"] == 0
+    r2 = no.backfill_gdelt_hist("2024-01-01", "2024-01-12", step_days=4)
+    assert r2["new"] == 0 and len(calls) == 3                       # qayta ishga tushirishda takrorlanmaydi
+    df = no.load_gdelt_hist([tmp_path / "gdelt_hist.jsonl"])
+    assert len(df) == 3 and (df.available_at > df.published_at).all()

@@ -55,6 +55,9 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("download"); d.add_argument("--years", type=int, default=12)
     g = sub.add_parser("gdelt"); g.add_argument("--days", type=int, default=90)
+    gh = sub.add_parser("gdelt-hist", help="GDELT arxividan 2024+ sarlavhalar (yangiliklardagi bo'shliqni to'ldirish)")
+    gh.add_argument("--start", default="2024-01-01"); gh.add_argument("--end", default=None)
+    gh.add_argument("--step", type=int, default=4); gh.add_argument("--budget", type=float, default=75)
     rl = sub.add_parser("real", help="haqiqiy ma'lumot bilan to'liq sozlash")
     rl.add_argument("--years", type=int, default=12)
     rl.add_argument("--gdelt-days", type=int, default=30)
@@ -112,6 +115,9 @@ def main(argv=None):
         print(json.dumps(download_all(a.years), indent=1))
     elif a.cmd == "gdelt":
         _gdelt(a.days)
+    elif a.cmd == "gdelt-hist":
+        from .data.news_open import backfill_gdelt_hist
+        print(json.dumps(backfill_gdelt_hist(a.start, a.end, a.step, a.budget)))
     elif a.cmd == "real":
         _real(a, cfg)
     elif a.cmd == "collect":
