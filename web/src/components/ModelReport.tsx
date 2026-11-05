@@ -3,8 +3,65 @@ import { api } from "../api";
 
 const VNAME: Record<string, string> = {
   climatology: "Baza (shartsiz)", price: "Faqat narx", "price+season": "Narx + mavsum",
-  no_news: "Narx + mavsum + bozorlar", full: "To'liq (+ yangilik)",
+  no_news: "Narx + mavsum + bozorlar", full: "To'liq (+ yangilik)", full_scratch: "To'liq, oldindan o'qitishsiz",
 };
+
+function DeepLearning({ dl }: { dl: any }) {
+  const wf = dl["report_walkforward.json"];
+  const pt = dl["pretrain.json"];
+  if (!wf && !pt) return null;
+  const c = wf?.config ?? {};
+  const rows = wf ? Object.entries(wf.walk_forward_summary as Record<string, any>).sort((a, b) => a[1].pinball - b[1].pinball) : [];
+  const folds = wf ? wf.folds.filter((f: any) => f.fold !== "HOLDOUT") : [];
+  return (
+    <div className="report">
+      <h3>Deep learning tajribasi (Colab GPU)</h3>
+      {wf && (
+        <p className="lead">
+          Transformer: {c.layers} qatlam, {c.hidden} o'lcham, {c.heads} attention boshi, {c.lookback} kunlik oyna,
+          {" "}{c.ensemble} modelli ansambl. {folds.length} ta walk-forward davr
+          {folds.length ? ` (${folds[0].test_start} — ${folds[folds.length - 1].test_end})` : ""}.
+        </p>
+      )}
+      {pt && (
+        <p className="hint">
+          Self-supervised oldindan o'qitish (masked reconstruction, {Math.round((pt.mask_ratio ?? 0.3) * 100)}% kun yashirilgan,
+          {" "}{pt.cutoff} gacha {pt.rows?.toLocaleString()} oyna): tiklash xatosi <strong>{pt.best_val_mse?.toFixed(3)}</strong>,
+          oddiy o'rtacha bilan to'ldirish {pt.baseline_mean_fill_mse?.toFixed(3)}
+          {pt.baseline_mean_fill_mse ? ` (${Math.round((1 - pt.best_val_mse / pt.baseline_mean_fill_mse) * 100)}% yaxshiroq)` : ""}.
+        </p>
+      )}
+      {wf && (
+        <>
+          <div className="table-scroll">
+            <table className="metrics">
+              <thead><tr><th scope="col">Variant</th><th scope="col">Pinball</th>
+                {(c.horizons ?? []).map((h: number) => <th key={h} scope="col">Qamrov {h}k</th>)}</tr></thead>
+              <tbody>
+                {rows.map(([v, m], i) => (
+                  <tr key={v} className={i === 0 ? "best" : ""}><th scope="row">{VNAME[v] ?? v}</th><td>{m.pinball.toFixed(4)}</td>
+                    {(c.horizons ?? []).map((h: number) => <td key={h}>{(m[`h${h}_coverage90`] * 100).toFixed(1)}%</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ul className="tests">
+            {Object.entries(wf.ablation_tests as Record<string, any>).map(([k, t]) => {
+              const [a, b] = k.split(" vs ");
+              return (
+                <li key={k} className={t.mean_loss_diff < 0 && t.p_holm < 0.05 ? "good" : ""}>
+                  <strong>{VNAME[a] ?? a}</strong> vs {VNAME[b] ?? b}: {t.mean_loss_diff < 0 ? "yaxshiroq" : "yomonroq"},
+                  {" "}p (Holm) = {t.p_holm?.toFixed(3) ?? "—"}{t.p_holm < 0.05 ? " — statistik ahamiyatli" : " — ahamiyatsiz"}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+      {dl && <DeepLearning dl={dl} />}
+    </div>
+  );
+}
 
 export default function ModelReport() {
   const [rep, setRep] = useState<any>(null);
@@ -13,6 +70,8 @@ export default function ModelReport() {
   if (err) return <p className="muted">Hisobot yuklanmadi: {err}</p>;
   if (!rep) return <div className="skeleton" style={{ height: 240 }} />;
   const r = rep["report_final.json"] ?? rep["report_walkforward.json"];
+  const dl = rep.deep_learning;
+  if (!r && dl) return <DeepLearning dl={dl} />;
   if (!r) return <p className="muted">Hali baholash o'tkazilmagan. <code>python -m atlas.cli evaluate</code> ni ishga tushiring.</p>;
   const hz: number[] = r.config.horizons;
   const variants: string[] = r.variants;
@@ -86,6 +145,7 @@ export default function ModelReport() {
           </div>
         </>
       )}
+      {dl && <DeepLearning dl={dl} />}
     </div>
   );
 }

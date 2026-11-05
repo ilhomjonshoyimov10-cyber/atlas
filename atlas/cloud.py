@@ -254,7 +254,21 @@ def export_site(svc, collector_stats: dict | None = None, price_stats: dict | No
     except Exception as e:
         log.warning("Signallar eksporti: %s", e)
     _write("news.json", svc.store.recent(200))
-    _write("report.json", svc.report)
+    rep = dict(svc.report)
+    dl = {}
+    for name in ("report_walkforward.json", "pretrain.json", "tuning.json"):
+        f = REPORTS_DIR / name
+        if f.exists():
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                if name == "pretrain.json":
+                    d = {k: d.get(k) for k in ("best_val_mse", "baseline_mean_fill_mse", "cutoff", "rows", "mask_ratio", "arch", "history")}
+                dl[name] = d
+            except Exception as e:
+                log.warning("%s o'qilmadi: %s", name, e)
+    if dl:
+        rep["deep_learning"] = dl          # Colab GPU'dagi so'nggi walk-forward + oldindan o'qitish natijalari
+    _write("report.json", rep)
     _write("experiments.json", api.experiments())
     _write("track.json", track_record(svc.prices))
     _write("backtest/index.json", {"thresholds": BT_THRESHOLDS, "costs": BT_COSTS})
