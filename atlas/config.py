@@ -144,6 +144,8 @@ class ModelConfig:
     epochs: int = 30
     patience: int = 5
     use_news: bool = True
+    news_norm: bool = False          # yangilik sonini manba hajmiga nisbatan normallash (o'tgan 60 kun, sababiy)
+    news_dropout: float = 0.0        # o'qitishda namunaning yangiliklarini tasodifan o'chirish (yangiliksiz davrga tayyorlash)
     use_season: bool = True
     use_market: bool = True
     seed: int = 42

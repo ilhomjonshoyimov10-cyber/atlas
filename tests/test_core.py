@@ -365,3 +365,36 @@ def test_backtest_report_json_clean():
     rep = clean(build_report(mkt, "direction", 0.0, "real", robustness(mkt), perm_n=20))
     json.dumps(rep, allow_nan=False)
     assert "m" in rep["variants"] and "buy_hold" in rep["variants"]
+
+
+def test_news_count_normalization_is_causal_and_scale_free():
+    import numpy as np
+    from atlas.features.dataset import normalize_counts
+    cnt = np.ones((3, 300), "float32") * 70
+    cnt[:, 150:] = 10                                    # manba almashdi: 70/kun -> 10/kun
+    ev = np.ones((300, 4), "float32")
+    a, _ = normalize_counts(cnt, ev)
+    cnt2 = cnt.copy(); cnt2[:, 250:] = 999               # kelajakdagi o'zgarish
+    b, _ = normalize_counts(cnt2, ev)
+    assert np.allclose(a[:, :250], b[:, :250])           # o'tmish qiymatlari kelajakka bog'liq emas
+    assert abs(a[0, 140] - 1) < 1e-5 and abs(a[0, 299] - 1) < 1e-5   # 60 kundan keyin yangi daraja "odatiy"
+
+
+def test_news_dropout_only_removes():
+    import torch
+    from atlas.model.train import news_dropout
+    b = {"news_mask": torch.ones(1000, 7, dtype=torch.bool), "news": torch.ones(1000, 7, 5)}
+    o = news_dropout(b, 0.2)
+    frac_all = (~o["news_mask"].any(1)).float().mean().item()
+    assert 0.12 < frac_all < 0.3
+    assert torch.all(o["news"][~o["news_mask"]] == 0) and b["news_mask"].all()
+
+
+def test_gdelt_hist_loader(tmp_path):
+    import json
+    from atlas.data.news_open import load_gdelt_hist
+    f = tmp_path / "gdelt_hist_a.jsonl"
+    f.write_text("\n".join(json.dumps({"t": f"Oil prices rise on supply worries {i}", "s": "20240603T141500Z",
+                                       "d": "reuters.com", "u": f"https://x/{i}"}) for i in range(3)), encoding="utf-8")
+    df = load_gdelt_hist([f])
+    assert len(df) == 3 and str(df.available_at.min()) == "2024-06-03 14:20:00+00:00"

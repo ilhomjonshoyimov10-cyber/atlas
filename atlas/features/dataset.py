@@ -55,6 +55,16 @@ def price_features(df: pd.DataFrame) -> pd.DataFrame:
     return f
 
 
+def normalize_counts(cnt: np.ndarray, ev: np.ndarray, window: int = 60) -> tuple[np.ndarray, np.ndarray]:
+    """Xabarlar sonini manba hajmiga nisbatan o'lchaydi: kun t dagi son / o'tgan 60 kunlik o'rtacha (t ni o'z ichiga
+    olmaydi — kelajak ishlatilmaydi). Shunda manba almashganda (FNSPID ~70/kun -> GDELT ~125/kun -> kollektor ~20/kun)
+    model "yangilik keskin kamaydi/ko'paydi" deb adashmaydi; faqat nisbiy faollik (odatdagidan ko'p/kam) qoladi."""
+    g = pd.Series(cnt[0].astype("float64"))
+    base = g.rolling(window, min_periods=5).mean().shift(1)
+    base = base.fillna(g.expanding().mean().shift(1)).fillna(1.0).clip(lower=1.0).to_numpy("float32")
+    return (cnt / base[None, :]).astype("float32"), (ev / base[:, None]).astype("float32")
+
+
 @dataclass
 class Panel:
     feats: np.ndarray       # [N, F]
@@ -168,9 +178,13 @@ class BatchMaker:
         if cube is not None:
             self.emb = torch.from_numpy(cube.emb).to(device)
             # CPU'da numpy bilan xotira umumiy: kollektor kubni yangilasa, tensorlar ham yangilanadi
-            self.cnt = torch.from_numpy(cube.cnt).to(device)
+            cnt, ev = cube.cnt, cube.ev
+            if getattr(cfg, "news_norm", False):
+                cnt, ev = normalize_counts(cnt, ev)
+            self.cnt_raw = torch.from_numpy(cube.cnt).to(device)       # mask uchun: xabar bormi-yo'qmi
+            self.cnt = torch.from_numpy(cnt).to(device)
             self.tone = torch.from_numpy(cube.tone).to(device)
-            self.ev = torch.from_numpy(cube.ev).to(device)
+            self.ev = torch.from_numpy(ev).to(device)
             self.day = torch.from_numpy(cube.day_index(pd.DatetimeIndex(panel.date))).to(device)
             grp = np.array([SCOPE_IDX[ASSET_BY_SYMBOL[s].group] for s in panel.symbols])
             ast = np.array([SCOPE_IDX[s] for s in panel.symbols])
@@ -211,7 +225,7 @@ class BatchMaker:
         if extra_news is not None:   # "agar shu yangilik bo'lsa" ssenariysi (impact tahlili)
             tok = tok.clone()
             tok[:, -1] = tok[:, -1] + extra_news(a)
-        mask = valid & (self.cnt[zero, dc] > 0)
+        mask = valid & (self.cnt_raw[zero, dc] > 0)
         if extra_news is not None:
             mask[:, -1] = True
         out["news"] = tok

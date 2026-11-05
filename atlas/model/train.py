@@ -22,6 +22,21 @@ def set_seed(s: int):
     torch.manual_seed(s)
 
 
+def news_dropout(b: dict, p: float) -> dict:
+    """Namunalarning p qismida yangiliklar butunlay "yo'q" deb ko'rsatiladi, yana p/2 qismida alohida kunlar o'chiriladi.
+    Model yangiliksiz holatni (manba uzilishi, dam olish kunlari) ko'rib o'rganadi va bunday davrda tarafkashlik
+    (masalan, doim "short") qilmaydi. Faqat o'qitishda; baholash va bashoratda ishlatilmaydi."""
+    m = b["news_mask"]
+    B, K = m.shape
+    drop_all = torch.rand(B, 1, device=m.device) < p
+    drop_day = torch.rand(B, K, device=m.device) < p / 2
+    keep = ~(drop_all | drop_day)
+    b = dict(b)
+    b["news_mask"] = m & keep
+    b["news"] = b["news"] * keep[..., None].to(b["news"].dtype)
+    return b
+
+
 def build_model(cfg: ModelConfig, bm: BatchMaker | None = None, n_assets: int | None = None,
                 news_dim: int | None = None, device: str = "cpu") -> AtlasNet:
     if bm is not None:
@@ -65,6 +80,8 @@ def fit(cfg: ModelConfig, bm: BatchMaker, train_rows: np.ndarray, val_rows: np.n
         tl = 0.0
         for i in range(0, len(perm), cfg.batch_size):
             b = bm(perm[i:i + cfg.batch_size])
+            if cfg.use_news and getattr(cfg, "news_dropout", 0) > 0:
+                b = news_dropout(b, cfg.news_dropout)
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=use_amp):
                 loss = pinball_loss(model(b).float(), b["y"], cfg.quantiles)
             opt.zero_grad(set_to_none=True)

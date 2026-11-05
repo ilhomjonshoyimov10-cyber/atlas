@@ -181,9 +181,27 @@ def load_collected() -> pd.DataFrame:
     return NewsStore().to_frame()
 
 
+def load_gdelt_hist(paths=None) -> pd.DataFrame:
+    """GDELT DOC API arxividan yig'ilgan tarixiy sarlavhalar (2024+ bo'shliqni to'ldirish uchun).
+    Fayl: data/news/raw/gdelt_hist*.jsonl(.gz), har qatorda {"t": sarlavha, "s": seendate, "d": domen, "u": url}.
+    available_at = GDELT birinchi ko'rgan vaqt + nashr kechikishi (kelajak ishlatilmaydi)."""
+    files = paths or sorted(RAW.glob("gdelt_hist*.jsonl*"))
+    if not files:
+        return pd.DataFrame(columns=COLUMNS)
+    df = pd.concat([pd.read_json(f, lines=True) for f in files], ignore_index=True)
+    if df.empty:
+        return pd.DataFrame(columns=COLUMNS)
+    ts = pd.to_datetime(df["s"], format="%Y%m%dT%H%M%SZ", utc=True, errors="coerce")
+    out = pd.DataFrame({"origin": "gdelt", "source": df["d"].astype(str), "title": df["t"].astype(str),
+                        "url": df["u"].astype(str), "published_at": ts, "available_at": ts + PUBLISH_LAG, "assets": ""})
+    out = out.dropna(subset=["available_at"])
+    out["id"] = [_hid("g", u) for u in out.url]
+    return out[COLUMNS].drop_duplicates("id")
+
+
 def load_all_news() -> pd.DataFrame:
     """Barcha manbalarni birlashtiradi. Natija available_at bo'yicha tartiblangan."""
-    frames = [load_kaggle_djia(), load_fnspid(), load_gdelt_bq(), load_collected()]
+    frames = [load_kaggle_djia(), load_fnspid(), load_gdelt_bq(), load_gdelt_hist(), load_collected()]
     extra = NEWS_DIR / "extra.parquet"
     if extra.exists():
         frames.append(pd.read_parquet(extra))
