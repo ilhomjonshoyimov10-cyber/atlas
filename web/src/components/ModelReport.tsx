@@ -58,7 +58,6 @@ function DeepLearning({ dl }: { dl: any }) {
           </ul>
         </>
       )}
-      {dl && <DeepLearning dl={dl} />}
     </div>
   );
 }
