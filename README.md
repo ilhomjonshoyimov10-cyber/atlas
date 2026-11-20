@@ -1,5 +1,35 @@
 # ATLAS — yangilik va mavsumiylikka asoslangan bozor prognozi
 
+**Live site:** https://atlas-bozor.vercel.app
+
+<details open>
+<summary><b>English summary</b></summary>
+
+ATLAS is an end-to-end deep learning system that forecasts price ranges for 37 assets (forex, crypto,
+stocks, indices, commodities) at 1, 5 and 20 trading days, as calibrated quantiles (q05 / q50 / q95).
+
+- **Model (AtlasNet v2, PyTorch):** Transformer encoder over 60 days of price features; cross-asset
+  attention over the other 36 markets (lagged one day); attention over daily news embeddings from a frozen
+  FinBERT (PCA to 64 dims); a seasonality branch (calendar, FOMC/CPI/NFP, crop cycles); gated fusion of the
+  branches; a 3-seed ensemble; conformal (CQR) calibration so 90% intervals cover about 90%.
+- **Evaluation discipline:** strict leakage rules enforced by tests (news counts only if it was available
+  before the 20:00 UTC decision time, using the collector's own `first_seen` timestamps; PCA fit before the
+  holdout; 32-day embargo), walk-forward validation with ablations, a single final holdout, Diebold–Mariano
+  tests with Holm correction, and an experiment registry.
+- **Honest results:** on the synthetic quick-mode demo, calibration works, but the differences between model
+  variants are **not** statistically significant (Holm p > 0.6). The README reports this instead of hiding it.
+- **Production pipeline without a server:** GitHub Actions refreshes prices, RSS news, FinBERT scores and
+  forecasts every 30 minutes and retrains weekly; results go to a `data` branch; a React + TypeScript site on
+  Vercel reads them, with a serverless function for live quotes. An append-only forecast journal compares every
+  forecast with the realised price, so results are not cherry-picked.
+- **Also included:** technical-analysis detectors and SetupNet (dilated 1D-CNN with attention pooling) that
+  scores trading setups against random entry, FastAPI + WebSocket API, a Colab training notebook, Docker.
+
+Stack: Python, PyTorch, FinBERT (transformers), pandas, FastAPI, React, TypeScript, GitHub Actions, Vercel, Docker.
+The detailed documentation below is in Uzbek.
+
+</details>
+
 Forex, kripto, aksiyalar, indekslar va birja tovarlari (bug'doy, neft, oltin, kakao...) bir joyda.
 Deep learning modeli narx tarixi, mavsumiylik va **birinchi chiqadigan yangiliklarni** birga o'qib,
 har bir aktiv uchun **1, 5 va 20 savdo kunidan keyingi narx oralig'ini** bashorat qiladi:
